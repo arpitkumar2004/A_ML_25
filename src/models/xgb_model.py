@@ -1,11 +1,8 @@
-"""XGBoost wrapper."""
-import xgboost as xgb
+# placeholder - similar wrapper for xgboost
 class XGBModel:
-    def __init__(self, params=None):
-        self.params = params or {}
-        self.model = None
+    def __init__(self, cfg):
+        self.cfg = cfg
     def fit(self, X, y):
-        self.model = xgb.XGBRegressor(**self.params).fit(X, y)
+        raise NotImplementedError
     def predict(self, X):
-        return self.model.predict(X)
-
+        raise NotImplementedError

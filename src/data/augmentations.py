@@ -3,4 +3,7 @@
 import numpy as np
 import pandas as pd
 
-# class DataAugmenter:
+# placeholder for image augmentations or text augmentation
+def noop_augment(data):
+    return data
+

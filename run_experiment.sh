@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
-# Example runner to dispatch multiple experiments
-python main.py train --config configs/model/lgbm.yaml
-
+# simple launcher
+set -e
+CONFIG=${1:-configs/model/lgbm.yaml}
+python main.py train --config ${CONFIG}

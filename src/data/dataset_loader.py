@@ -2,13 +2,26 @@
 import os
 import pandas as pd
 
+
+def load_train_df(path):
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Train csv not found: {path}")
+    df = pd.read_csv(path)
+    # Basic sanity checks
+    required = ['sample_id', 'catalog_content', 'price']
+    for r in required:
+        if r not in df.columns:
+            raise ValueError(f"Missing required column: {r}")
+    return df
+
 class DatasetLoader:
     def __init__(self, path):
         self.path = path
         
     def load(self):
         return pd.read_csv(self.path)
-    
+
+
     def save(self, df):
         df.to_csv(self.path, index=False)
         print(f"Dataset saved to {self.path}")

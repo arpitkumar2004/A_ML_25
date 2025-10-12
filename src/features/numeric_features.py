@@ -1,7 +1,7 @@
-"""Numeric transformations."""
-def scale_numeric(df, cols):
-    from sklearn.preprocessing import StandardScaler
-    scaler = StandardScaler()
-    df[cols] = scaler.fit_transform(df[cols])
-    return df
+import numpy as np
 
+def build_numeric_features(df, numeric_cols=None):
+    if numeric_cols is None:
+        numeric_cols = ['desc_clean_len', 'parsed_ounces']
+    X = df[numeric_cols].fillna(0).values.astype(float)
+    return X

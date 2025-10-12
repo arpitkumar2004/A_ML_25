@@ -1,11 +1,8 @@
-"""CatBoost wrapper."""
-from catboost import CatBoostRegressor
-class CatModel:
-    def __init__(self, params=None):
-        self.params = params or {}
-        self.model = None
+# placeholder wrapper for CatBoost
+class CatBoostModel:
+    def __init__(self, cfg):
+        self.cfg = cfg
     def fit(self, X, y):
-        self.model = CatBoostRegressor(**self.params).fit(X, y)
+        raise NotImplementedError
     def predict(self, X):
-        return self.model.predict(X)
-
+        raise NotImplementedError

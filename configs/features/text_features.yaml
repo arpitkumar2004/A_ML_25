@@ -1,5 +1,10 @@
-## text_features.yaml
-text:
-  use_bert: true
-  max_len: 128
-
+text_method: tfidf
+tfidf:
+  max_features: 5000
+  ngram_range: [1,2]
+sbert:
+  model_name: "all-MiniLM-L6-v2"
+  batch_size: 64
+  normalize: true
+  max_length: 128
+  device: "cpu"  # or "cuda"  

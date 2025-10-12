@@ -1,6 +1,9 @@
-"""Evaluation and CV helpers."""
-from sklearn.metrics import mean_squared_error
-def rmse(y_true, y_pred):
-    import numpy as np
-    return float(mean_squared_error(y_true, y_pred, squared=False))
+import numpy as np
+from .metrics import rmse, rmsle, mae
 
+def evaluate(y_true, y_pred):
+    return {
+        "rmse": rmse(y_true, y_pred),
+        "rmsle": rmsle(y_true, y_pred),
+        "mae": mae(y_true, y_pred)
+    }

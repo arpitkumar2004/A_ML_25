@@ -1,5 +1,3 @@
-"""Postprocessing outputs."""
-def clamp_preds(preds, lower=0.0):
-    import numpy as np
-    return np.clip(preds, lower, None)
-
+import numpy as np
+def invert_log1p(preds):
+    return np.expm1(preds)
