@@ -1,15 +1,15 @@
 experiment_name: lgbm_baseline
 data:
   train_path: data/raw/train.csv
-  id_col: unique_identifier
-  text_col: Description
-  target_col: Price
+  id_col: sample_id
+  text_col: catalog_content
+  target_col: price
 features:
   use_text: true
   use_parsed: true
   text_method: tfidf
 training:
-  cv_folds: 5
+  cv_folds: 3
   random_seed: 42
   target_transform: log1p
 model:

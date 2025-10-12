@@ -1,6 +1,6 @@
 text_method: tfidf
 tfidf:
-  max_features: 5000
+  max_features: 500
   ngram_range: [1,2]
 sbert:
   model_name: "all-MiniLM-L6-v2"

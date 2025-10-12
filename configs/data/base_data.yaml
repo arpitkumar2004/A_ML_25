@@ -3,7 +3,14 @@ dataset:
   name: base
   path: data/raw
   target: price
+  sample: 0.1  # use 10% of data for quick check
+
 preprocessing:
   fill_na: true
   normalise: false
 
+# data_path: "data/processed/train.csv"
+# text_column: "Description"
+# target_column: "Price"
+# sample_frac: 0.1        # use 10% of data for quick check
+# random_state: 42
