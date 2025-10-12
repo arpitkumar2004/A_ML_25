@@ -1,0 +1,7 @@
+## cv_stratified.yaml
+cv:
+  type: StratifiedKFold
+  n_splits: 5
+  shuffle: true
+  random_state: 42
+

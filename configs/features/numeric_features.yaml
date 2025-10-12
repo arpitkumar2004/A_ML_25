@@ -1,0 +1,5 @@
+## numeric_features.yaml
+numeric:
+  normalise: true
+  impute_strategy: median
+

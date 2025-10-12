@@ -1,0 +1,1 @@
+FROM alpine:3.18\n# CI helper image placeholder\n

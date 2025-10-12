@@ -1,0 +1,8 @@
+## xgb.yaml
+model:
+  name: xgboost
+  params:
+    max_depth: 8
+    eta: 0.05
+    nrounds: 2000
+

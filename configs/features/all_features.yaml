@@ -1,0 +1,4 @@
+## all_features.yaml
+features:
+  include: [numeric, text, parsed]
+

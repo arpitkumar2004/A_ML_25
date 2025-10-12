@@ -1,0 +1,5 @@
+## external_data.yaml
+external:
+  provider: example_provider
+  path: data/external
+

@@ -1,0 +1,10 @@
+## augmented_data.yaml
+dataset:
+  name: augmented
+  path: data/processed/augmented
+augmentation:
+  enable: true
+  methods:
+    - noise
+    - synthetic_features
+

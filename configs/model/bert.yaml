@@ -1,0 +1,6 @@
+## bert.yaml
+model:
+  name: bert_regressor
+  pretrained: bert-base-uncased
+  fine_tune: true
+

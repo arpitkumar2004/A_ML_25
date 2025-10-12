@@ -1,0 +1,5 @@
+## text_features.yaml
+text:
+  use_bert: true
+  max_len: 128
+

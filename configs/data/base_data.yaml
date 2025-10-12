@@ -1,0 +1,9 @@
+## base_data.yaml
+dataset:
+  name: base
+  path: data/raw
+  target: price
+preprocessing:
+  fill_na: true
+  normalise: false
+

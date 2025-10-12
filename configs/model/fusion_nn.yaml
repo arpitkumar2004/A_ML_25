@@ -1,0 +1,7 @@
+## fusion_nn.yaml
+model:
+  name: fusion_nn
+  arch:
+    tabular_layers: [256, 128]
+    text_pooling: mean
+

@@ -1,0 +1,9 @@
+## ensemble.yaml
+ensemble:
+  method: stacking
+  base_models:
+    - lgbm
+    - xgb
+    - bert_regressor
+  meta_model: lgbm
+

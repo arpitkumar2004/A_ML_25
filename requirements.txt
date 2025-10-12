@@ -1,0 +1,10 @@
+# Put pinned deps here
+pandas
+numpy
+scikit-learn
+lightgbm
+xgboost
+catboost
+joblib
+pytest
+

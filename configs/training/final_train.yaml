@@ -1,0 +1,5 @@
+## final_train.yaml
+train:
+  use_all_data: true
+  save_model: true
+

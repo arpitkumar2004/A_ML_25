@@ -1,0 +1,5 @@
+## params_sweep.yaml
+optuna:
+  n_trials: 100
+  direction: minimize
+

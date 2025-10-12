@@ -1,0 +1,8 @@
+## inference.yaml
+inference:
+  batch_size: 512
+  ensemble_weights:
+    lgbm: 0.4
+    xgb: 0.3
+    bert: 0.3
+
