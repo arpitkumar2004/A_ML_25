@@ -2,83 +2,41 @@
 import os
 import pandas as pd
 
-
-def load_train_df(path):
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Train csv not found: {path}")
-    df = pd.read_csv(path)
-    # Basic sanity checks
-    required = ['sample_id', 'catalog_content', 'price']
-    for r in required:
-        if r not in df.columns:
-            raise ValueError(f"Missing required column: {r}")
-    return df
-
 class DatasetLoader:
     def __init__(self, path):
         self.path = path
-        
-    def load(self):
-        return pd.read_csv(self.path)
+        self.df = None
 
-
-    def save(self, df):
-        df.to_csv(self.path, index=False)
-        print(f"Dataset saved to {self.path}")
+    def load_train_df(path):
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Train csv not found: {path}")
+        df = pd.read_csv(path)
+        # Basic sanity checks
+        required = ['sample_id', 'catalog_content', 'price']
+        for r in required:
+            if r not in df.columns:
+                raise ValueError(f"Missing required column: {r}")
+        return df
+    
+    def load_test_df(path):
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Test csv not found: {path}")
+        df = pd.read_csv(path)
+        # Basic sanity checks
+        required = ['sample_id', 'catalog_content', 'image_link']
+        for r in required:
+            if r not in df.columns:
+                raise ValueError(f"Missing required column: {r}")
+        return df
+    
+    def load_sample_out(path):
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Sample output csv not found: {path}")
+        df = pd.read_csv(path)
+        # Basic sanity checks
+        required = ['sample_id', 'price']
+        for r in required:
+            if r not in df.columns:
+                raise ValueError(f"Missing required column: {r}")
+        return df
         
-class DatasetSplitter:
-    def __init__(self, df):
-        self.df = df
-        
-    def train_test_split(self, test_size=0.2, random_state=42):
-        train_df = self.df.sample(frac=1 - test_size, random_state=random_state)
-        test_df = self.df.drop(train_df.index)
-        return train_df, test_df
-    
-    def stratified_split(self, target_col, test_size=0.2, random_state=42):
-        from sklearn.model_selection import train_test_split
-        train_df, test_df = train_test_split(self.df, test_size=test_size, 
-                                             stratify=self.df[target_col], 
-                                             random_state=random_state)
-        return train_df, test_df
-    
-    
-class DataScaling:
-    def __init__(self, df):
-        self.df = df
-        
-    def scale_numeric(self, cols):
-        from sklearn.preprocessing import StandardScaler
-        scaler = StandardScaler()
-        self.df[cols] = scaler.fit_transform(self.df[cols])
-        return self.df
-    def min_max_scale(self, cols):
-        from sklearn.preprocessing import MinMaxScaler
-        scaler = MinMaxScaler()
-        self.df[cols] = scaler.fit_transform(self.df[cols])
-        return self.df
-    def robust_scale(self, cols):
-        from sklearn.preprocessing import RobustScaler
-        scaler = RobustScaler()
-        self.df[cols] = scaler.fit_transform(self.df[cols])
-        return self.df
-    
-class DataTransfromation:
-    def __init__(self, df):
-        self.df = df
-        
-    def log_transform(self, cols):
-        for col in cols:
-            self.df[col] = self.df[col].apply(lambda x: np.log1p(x) if x > 0 else 0)
-        return self.df
-    
-    def sqrt_transform(self, cols):
-        for col in cols:
-            self.df[col] = self.df[col].apply(lambda x: np.sqrt(x) if x >= 0 else 0)
-        return self.df
-    
-    def boxcox_transform(self, cols):
-        from scipy import stats
-        for col in cols:
-            self.df[col], _ = stats.boxcox(self.df[col] + 1)  # Adding 1 to avoid zero values
-        return self.df
