@@ -1,5 +1,23 @@
 ## final_train.yaml
-train:
-  use_all_data: true
-  save_model: true
-
+data:
+  base: true
+  processed: false
+training:
+  cv_stratified: true
+model:
+  ensemble: true
+features:
+  all_features: true
+  numeric: true
+  parsed: true
+  text: true
+  text_method: tfidf
+  image_embeddings: false
+  text_embeddings: false
+  select_features: false
+  select_method: lasso
+  select_top_k: 500
+model_params:
+  lgbm: true
+  bert: true
+  ensemble: true

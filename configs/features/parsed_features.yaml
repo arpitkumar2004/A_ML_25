@@ -1,6 +1,12 @@
 ## parsed_features.yaml
 parsed:
-  extractors:
-    - count_tokens
-    - count_numbers
+  features:
+    - item_name
+    - prod_description
+    - bullet_points
+    - value
+    - unit
+
+  fillna: true
+  encode: true
 

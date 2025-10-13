@@ -13,7 +13,7 @@ class LGBMModel:
         self.model.fit(
             X_train, y_train,
             eval_set=eval_set,
-            eval_metric="rmse",
+            eval_metric="smape",
             callbacks=callbacks,
         )
         return self

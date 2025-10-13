@@ -1,9 +1,18 @@
 import numpy as np
 from sklearn.model_selection import KFold
-from ..models.lgbm_model import LGBMModel
-from ..utils.seed_everything import seed_everything
-from ..training.metrics import rmsle
+from src.models.lgbm_model import LGBMModel
+from src.utils.seed_everything import seed_everything
+from src.training.metrics import rmsle
 import os
+
+def train_base_model(X, y, cfg):
+    model_cfg = cfg['model']
+    model = LGBMModel(params=cfg["model"]["params"])
+    model.fit(X, y)
+    return model
+
+
+    
 
 def train_lgbm_cv(X, y, cfg):
     folds = cfg['training'].get('cv_folds', 3)
@@ -27,3 +36,11 @@ def train_lgbm_cv(X, y, cfg):
     # save models directory
     os.makedirs("experiments/models", exist_ok=True)
     return models, oof
+
+def train_model(X, y, cfg):
+    if cfg['training'].get('cv_folds', 0) > 1:
+        return train_lgbm_cv(X, y, cfg)
+    else:
+        model = train_base_model(X, y, cfg)
+        return [model], model.predict(X)
+    

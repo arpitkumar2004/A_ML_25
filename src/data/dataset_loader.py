@@ -40,3 +40,6 @@ class DatasetLoader:
                 raise ValueError(f"Missing required column: {r}")
         return df
         
+    def save_submission(self, df, path: str="data\submissions\submission.csv"):
+        df.to_csv(path, index=False)
+        print(f"Submission saved to {path}")

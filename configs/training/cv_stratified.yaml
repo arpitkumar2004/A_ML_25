@@ -1,7 +1,7 @@
 ## cv_stratified.yaml
-cv:
-  type: StratifiedKFold
-  n_splits: 3
-  shuffle: true
-  random_state: 42
+training:
+  cv_folds: 5
+  random_seed: 42
+  stratified: true
+  stratify_bins: 10
 

@@ -2,13 +2,13 @@
 def main(cfg_path):
     print('Training pipeline reading', cfg_path)
 
-from ..data.dataset_loader import load_train_df
-from ..data.parse_features import add_parsed_features
-from ..features.build_features import build_features_for_train
-from ..training.trainer import train_lgbm_cv
+from src.data.dataset_loader import load_train_df
+from src.data.parse_features import add_parsed_features
+from src.features.build_features import build_features_for_train
+from src.training.trainer import train_lgbm_cv
 import numpy as np
 import joblib
-from ..utils.logging_utils import get_logger
+from src.utils.logging_utils import get_logger
 
 logger = get_logger("train_pipeline")
 
@@ -34,4 +34,44 @@ def run_train_pipeline(cfg):
         joblib.dump(model, f"experiments/models/model_fold{i}.pkl")
     joblib.dump(vect, "experiments/models/vectorizer.pkl")
     logger.info("Models and vectorizer saved")
+
+def run_train_pipeline_full(cfg):
+    # Load data
+    df = load_train_df(cfg['data']['train_path'])
+    logger.info(f"Loaded training data with shape: {df.shape}")
+    
+    # Add parsed features if configured
+    if cfg.get('parsed', {}).get('features'):
+        df = add_parsed_features(df, cfg['data']['text_col'])
+        logger.info("Added parsed features.")
+    
+    # Build features
+    X, vect = build_features_for_train(df, cfg)
+    y = df[cfg['data']['target_col']].values
+    logger.info(f"Built features with shape: {X.shape}")
+    
+    # Train model with cross-validation
+    models, oof = train_lgbm_cv(X, y, cfg)
+    
+    # Save models and vectorizer
+    joblib.dump(models, cfg['training'].get('model_save_path', 'experiments/models/lgbm_models.pkl'))
+    joblib.dump(vect, cfg['training'].get('vectorizer_save_path', 'experiments/models/tfidf_vectorizer.pkl'))
+    logger.info("Saved trained models and vectorizer.")
+    
+    return models, oof
+
+if __name__ == "__main__":
+    import sys
+    import yaml
+    if len(sys.argv) != 2:
+        print("Usage: python train_pipeline.py <config_path>")
+        sys.exit(1)
+    cfg_path = sys.argv[1]
+    with open(cfg_path, 'r') as f:
+        cfg = yaml.safe_load(f)
+    run_train_pipeline(cfg)
+    
+    print('Training pipeline reading', cfg_path)
+    
+
         

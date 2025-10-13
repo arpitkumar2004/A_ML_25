@@ -1,8 +1,30 @@
 ## xgb.yaml
 model:
-  name: xgboost
+  name: xgb
   params:
-    max_depth: 8
-    eta: 0.05
-    nrounds: 2000
-
+    objective: reg:squarederror
+    learning_rate: 0.05
+    n_estimators: 1000
+    max_depth: 6
+    subsample: 0.8
+    colsample_bytree: 0.8
+    random_state: 42
+    tree_method: "hist"  # or "gpu_hist" if using GPU
+    eval_metric: "smape"  # or "rmse"
+    early_stopping_rounds: 50
+    n_jobs: 4  # number of parallel threads
+    target_transform: log1p  # options: log1p, none
+    n_splits: 3  # number of CV folds
+    stratified: false  # whether to use stratified splitting for regression
+    stratify_bins: 10  # number of bins for stratification if stratified is
+    verbose: 1
+    output_dir: "experiments/models/xgb_model"
+    logging_dir: "experiments/logs/xgb_logs"
+    save_steps: 100
+    eval_steps: 100
+    evaluation_strategy: "steps"  # or "epoch"
+    save_total_limit: 2
+    load_best_model_at_end: true
+    metric_for_best_model: "smape"
+    greater_is_better: false
+    

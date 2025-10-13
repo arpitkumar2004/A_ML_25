@@ -1,4 +1,12 @@
 import numpy as np
+
+def smape(y_true, y_pred):
+    y_true, y_pred = np.array(y_true), np.array(y_pred)
+    denominator = (np.abs(y_true) + np.abs(y_pred)) / 2.0
+    diff = np.abs(y_true - y_pred) / denominator
+    diff[denominator == 0] = 0.0  # handle division by zero
+    return np.mean(diff) * 100
+
 def rmse(y_true, y_pred):
     return np.sqrt(((y_true - y_pred)**2).mean())
 def mae(y_true, y_pred):
@@ -15,4 +23,5 @@ def adjusted_r2_score(y_true, y_pred, n_features):
     n = len(y_true)
     r2 = r2_score(y_true, y_pred)
     return 1 - (1 - r2) * (n - 1) / (n - n_features - 1) if n > n_features + 1 else r2
+
 

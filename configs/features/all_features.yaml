@@ -1,4 +1,10 @@
 ## all_features.yaml
 features:
-  include: [numeric, text, parsed]
+  text_method: tfidf  # options: tfidf, sbert
+  numeric: true
+  parsed: true
+  image_embeddings: false
+  text_embeddings: false
+  select_features: false
+  select_method: lasso  # options: lasso, tree, none
 

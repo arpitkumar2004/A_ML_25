@@ -1,7 +1,7 @@
 import numpy as np
-from .text_embeddings import fit_tfidf, load_tfidf
+# from .text_embeddings import fit_tfidf, load_tfidf
 from .numeric_features import build_numeric_features
-from ..data.text_cleaning import clean_text
+from src.data.text_cleaning import clean_text
 
 def build_features_for_train(df, cfg):
     texts = df[cfg['data']['text_col']].astype(str).apply(clean_text).tolist()
@@ -14,3 +14,12 @@ def build_features_for_train(df, cfg):
     from scipy.sparse import hstack, csr_matrix
     X = hstack([X_text, csr_matrix(X_num)])
     return X, vect
+
+def build_features_for_inference(df, cfg, vect):
+    texts = df[cfg['data']['text_col']].astype(str).apply(clean_text).tolist()
+    X_text = load_tfidf(texts, vect)
+    X_num = build_numeric_features(df)
+    # combine
+    from scipy.sparse import hstack, csr_matrix
+    X = hstack([X_text, csr_matrix(X_num)])
+    return X

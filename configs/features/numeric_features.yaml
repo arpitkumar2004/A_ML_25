@@ -1,5 +1,11 @@
 ## numeric_features.yaml
 numeric:
-  normalise: true
-  impute_strategy: median
-
+  features:
+    - length
+    - word_count
+    - special_char_count
+    - digit_count
+    - uppercase_count
+  fillna: true
+  scale: true
+  
