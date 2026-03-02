@@ -1,7 +1,5 @@
-## cv_stratified.yaml
-training:
-  cv_folds: 5
-  random_seed: 42
-  stratified: true
-  stratify_bins: 10
-
+cv:
+  n_splits: 5
+  shuffle: true
+  stratify: false   # set True if target can be stratified
+  random_state: 42

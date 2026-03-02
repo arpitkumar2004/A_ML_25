@@ -1,10 +1,11 @@
-## augmented_data.yaml
-dataset:
-  name: augmented
-  path: data/processed/augmented
+# Additional augmented datasets
 augmentation:
-  enable: true
-  methods:
-    - noise
-    - synthetic_features
+  use_external_images: true
+  synthetic_noise: true
+  random_flip: true
+  brightness_adjust: 0.1
+  rotation: 5   # degrees
+  gaussian_noise_std: 0.01
 
+paths:
+  augmented_dir: "data/external/augmented_images"

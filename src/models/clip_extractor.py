@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import os
+
 # Load model on GPU (if available)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_NAME = "openai/clip-vit-base-patch32"
@@ -58,5 +59,6 @@ class ClipExtractor:
         self.model.load_state_dict(torch.load(filepath, map_location=self.device))
         self.model.to(self.device)
         self.model.eval()
-        return self    
+        return self.model.eval()
+    
     

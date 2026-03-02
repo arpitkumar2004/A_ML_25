@@ -1,11 +1,5 @@
-## numeric_features.yaml
-numeric:
-  features:
-    - length
-    - word_count
-    - special_char_count
-    - digit_count
-    - uppercase_count
-  fillna: true
-  scale: true
-  
+numeric_features:
+  scaler: "standard"   # standard, minmax
+  generate_ratios: true
+  generate_price_stats: true
+  cache_path: "data/processed/numeric_features.joblib"

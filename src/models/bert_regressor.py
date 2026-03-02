@@ -68,39 +68,3 @@ class BertRegressor(BaseModel):
             raise ValueError("Model is not fitted yet.")
         preds = self.predict(texts)
         return smape(y, preds)
-    
-def cross_validate_model(model_class, texts, y, cfg, metric):
-    folds = cfg['training'].get('cv_folds', 3)
-    seed = cfg['training'].get('random_seed', 42)
-    seed_everything(seed)
-    kf = KFold(n_splits=folds, shuffle=True, random_state=seed)
-    scores = []
-    for fold, (tr_idx, val_idx) in enumerate(kf.split(texts)):
-        X_tr, X_val = texts[tr_idx], texts[val_idx]
-        y_tr, y_val = y[tr_idx], y[val_idx]
-        model = model_class(random_seed=seed)
-        model.fit(model._get_bert_embeddings(X_tr), y_tr)
-        score = evaluate_model(model, X_val, y_val, metric)
-        print(f"Fold {fold} score: {score:.6f}")
-        scores.append(score)
-    return scores, np.mean(scores), np.std(scores)
-
-def evaluate_model(model, texts, y, metric):
-    """Evaluate model using the specified metric."""
-    y_pred = model.predict(texts)
-    return metric(y, y_pred)
-
-def get_feature_importance(model, feature_names):
-    """Get feature importance from the model."""
-    if hasattr(model, 'feature_importances_'):
-        importances = model.feature_importances_
-    elif hasattr(model, 'coef_'):
-        importances = model.coef_
-    else:
-        raise NotImplementedError("Feature importances not available for this model.")
-    
-    return pd.DataFrame({
-        'feature': feature_names,
-        'importance': importances
-    }).sort_values(by='importance', ascending=False)
-    

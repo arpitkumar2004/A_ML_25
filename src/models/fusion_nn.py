@@ -36,6 +36,7 @@ class FusionDataset(Dataset):
         if self.targets is not None:
             item['target'] = torch.tensor(self.targets[idx], dtype=torch.float)
         return item
+    
 class FusionNN(BaseEstimator, RegressorMixin):
     def __init__(self, text_dim, image_dim, tabular_dim, hidden_dim=128, random_seed=42, lr=1e-3, batch_size=32, epochs=10):
         self.text_dim = text_dim
@@ -96,6 +97,7 @@ class FusionNN(BaseEstimator, RegressorMixin):
             print(f"Epoch {epoch+1}/{self.epochs}, Loss: {epoch_loss:.6f}")
         self.is_fitted = True
         return self
+    
     def predict(self, X_text, X_image, X_tabular):
         if not self.is_fitted:
             raise ValueError("Model is not fitted yet.")
@@ -133,47 +135,3 @@ class FusionNN(BaseEstimator, RegressorMixin):
             raise ValueError("Model is not fitted yet.")
         preds = self.predict(X_text, X_image, X_tabular)
         return smape(y, preds)
-    
-def cross_validate_model(model_class, X_text, X_image, X_tabular, y, cfg, metric):
-    folds = cfg['training'].get('cv_folds', 3)
-    seed = cfg['training'].get('random_seed', 42)
-    seed_everything(seed)
-    kf = KFold(n_splits=folds, shuffle=True, random_state=seed)
-    scores = []
-    for fold, (tr_idx, val_idx) in enumerate(kf.split(X_text)):
-        X_tr_text, X_val_text = X_text[tr_idx], X_text[val_idx]
-        X_tr_image, X_val_image = X_image[tr_idx], X_image[val_idx]
-        X_tr_tabular, X_val_tabular = X_tabular[tr_idx], X_tabular[val_idx]
-        y_tr, y_val = y[tr_idx], y[val_idx]
-        model = model_class(
-            text_dim=X_tr_text.shape[1],
-            image_dim=X_tr_image.shape[1],
-            tabular_dim=X_tr_tabular.shape[1],
-            random_seed=seed,
-            **cfg['model'].get('params', {})
-        )
-        model.fit(X_tr_text, X_tr_image, X_tr_tabular, y_tr)
-        score = evaluate_model(model, (X_val_text, X_val_image, X_val_tabular), y_val, metric)
-        print(f"Fold {fold} score: {score:.6f}")
-        scores.append(score)
-    return scores, np.mean(scores), np.std(scores)
-
-def get_feature_importance(model, feature_names):
-    """Get feature importance from the model."""
-    if hasattr(model, 'feature_importances_'):
-        importances = model.feature_importances_
-    elif hasattr(model, 'coef_'):
-        importances = model.coef_
-    else:
-        raise NotImplementedError("Feature importances not available for this model.")
-    
-    return pd.DataFrame({
-        'feature': feature_names,
-        'importance': importances
-    }).sort_values(by='importance', ascending=False)
-    
-def evaluate_model(model, X, y, metric):
-    """Evaluate model using the specified metric."""
-    X_text, X_image, X_tabular = X
-    y_pred = model.predict(X_text, X_image, X_tabular)
-    return metric(y, y_pred)

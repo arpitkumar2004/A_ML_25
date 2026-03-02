@@ -1,18 +1,27 @@
-"""Data augmentation helpers."""
+# src/data/augmentations.py
+from typing import Any
 
-import numpy as np
-import pandas as pd
+# Placeholder augmentation module.
+# For images, prefer albumentations or torchvision transforms in actual impl.
 
-# placeholder for image augmentations or text augmentation
-def noop_augment(data):
-    return data
+class Augmentations:
+    @staticmethod
+    def noop(item: Any) -> Any:
+        """No-op augmentation (useful for pipeline tests)."""
+        return item
 
-class DataImputer:
-    """
-    Imputes missing values in the parsed features by extracting text form image links from the column image link.
-    """
-    def __init__(self):
-        pass
-    
-    def impute_missing(self, df: pd.DataFrame) -> pd.DataFrame:
-        return df
+    @staticmethod
+    def example_text_noise(text: str, drop_prob: float = 0.01) -> str:
+        """
+        Simple text augmentation: randomly drop characters (not words).
+        Only for experimentation — use sparingly.
+        """
+        import random
+        if not text:
+            return ""
+        out = []
+        for ch in text:
+            if random.random() < drop_prob:
+                continue
+            out.append(ch)
+        return "".join(out)

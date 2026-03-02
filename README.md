@@ -1,112 +1,205 @@
-# Price Prediction Competition
+# A_ML_25 — Multimodal Price Prediction System
 
-Problem Statement
+Production-oriented ML repository for product price prediction using text, image, and numeric signals.
 
-ML Challenge 2025 Problem Statement
+This project contains:
 
-Smart Product Pricing Challenge
+- an end-to-end offline training pipeline,
+- an inference pipeline and submission generation,
+- a baseline online serving API,
+- CI quality gates and developer onboarding assets.
 
-In e-commerce, determining the optimal price point for products is crucial for marketplace success and customer satisfaction. Your challenge is to develop an ML solution that analyzes product details and predict the price of the product. The relationship between product attributes and pricing is complex - with factors like brand, specifications, product quantity directly influence pricing. Your task is to build a model that can analyze these product details holistically and suggest an optimal price.
+## 1) Project Overview
 
-Data Description:
-The dataset consists of the following columns:
+The system predicts product price from multimodal inputs:
 
-1. sample_id: A unique identifier for the input sample
-2. catalog_content: Text field containing title, product description and an Item Pack Quantity(IPQ) concatenated.
-3. image_link: Public URL where the product image is available for download. Example link - https://m.media-amazon.com/images/I/71XfHPR36-L.jpg (https://m.media-amazon.com/images/I/71XfHPR36-L.jpg) To download images, use the download_images function from src/utils.py. See sample code in src/test.ipynb.
-4. price: Price of the product (Target variable - only available in training data)
+- text content (titles/descriptions),
+- image representations,
+- parsed numeric features (quantity/unit and derived signals).
 
-Dataset Details:
-Training Dataset: 75k products with complete product details and prices
-Test Set: 75k products for final evaluation
+Primary metric: SMAPE (lower is better).
 
-Output Format:
-The output file should be a CSV with 2 columns:
+## 2) Repository Structure
 
-    sample_id: The unique identifier of the data sample. Note the ID should match the test record sample_id.
+```text
+main.py                        # CLI entrypoint (train/inference/features/ensemble/quickrun)
+configs/                       # YAML configs for training, inference, models, and features
+src/
+    data/                        # Data loading, parsing, text cleaning
+    features/                    # Text/image/numeric feature builders and reducers
+    models/                      # Model wrappers (Linear/RF/LGBM/XGB/Cat/etc.)
+    training/                    # CV utilities, trainer, metrics
+    inference/                   # Predict and postprocess pipeline
+    pipelines/                   # Train/infer/feature/ensemble orchestrators
+    serving/                     # FastAPI serving baseline
+ci_cd/tests/                   # CI test suite
+docs/                          # SLO and handover docs
+experiments/                   # Artifacts: models, oof, logs, reports, submissions
+```
 
-    price: A float value representing the predicted price of the product.
+## 3) Core Architecture
 
-Note: Make sure to output a prediction for all sample IDs. If you have less/more number of output samples in the output file as compared to test.csv, your output won't be evaluated.
+### Offline path (training)
 
-File Descriptions:
+1. Load dataset
+2. Parse/clean features
+3. Build multimodal feature matrix
+4. Optional dimensionality reduction
+5. CV training for base models
+6. Build OOF matrix and optional stacker
+7. Persist artifacts and reports
 
-Source files
+### Offline path (batch inference)
 
-1. src/utils.py: Contains helper functions for downloading images from the image_link. You may need to retry a few times to download all images due to possible throttling issues.
+1. Load inference CSV
+2. Rebuild features with saved/cached transforms
+3. Load fold models + stacker
+4. Predict + postprocess
+5. Write output CSV
 
-2. sample_code.py: Sample dummy code that can generate an output file in the given format. Usage of this file is optional.
+### Online path (serving baseline)
 
-Dataset files
+FastAPI service in `src/serving/app.py`:
 
-    dataset/train.csv: Training file with labels (price).
+- `GET /healthz`
+- `GET /readyz`
+- `POST /v1/warmup`
+- `POST /v1/predict`
 
-    dataset/test.csv: Test file without output labels (price). Generate predictions using your model/solution on this file's
+## 4) Environment Setup
 
-    data and format the output file to match sample_test_out.csv
+### Prerequisites
 
-    dataset/sample_test.csv: Sample test input file.
+- Python 3.10+
+- pip
 
-    dataset/sample_test_out.csv: Sample outputs for sample_test.csv. The output for test.csv must be formatted in the
+### Install
 
-    exact same way. Note: The predictions in the file might not be correct
+```bash
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
 
-    Constraints:
+### Verify
 
-    You will be provided with a sample output file. Format your output to match the sample output file exactly.
+```bash
+python -m compileall src main.py
+pytest -q ci_cd/tests
+python main.py --help
+```
 
-    Predicted prices must be positive float values.
+## 5) How to Run
 
-    Final model should be a MIT/Apache 2.0 License model and up to 8 Billion parameters.
+### Train
 
-    Evaluation Criteria:
+```bash
+python main.py train --config configs/training/final_train.yaml
+```
 
-Submissions are evaluated using Symmetric Mean Absolute Percentage Error (SMAPE): A statistical measure that expresses the relative difference between predicted and actual values as a percentage, while treating positive and negative errors equally.
+Train single model only:
 
-Formula:
+```bash
+python main.py train --config configs/training/final_train.yaml --model lgbm
+```
 
-SMAPE = (1/n) * Σ |predicted_price - actual_price| / ((|actual_price| + |predicted_price|)/2)
+### Build features only
 
-Example: If actual price = $100 and predicted price = $120
-SMAPE = |100-120| / ((|100| + |120|)/2) * 100% = 18.18%
+```bash
+python main.py features --config configs/features/all_features.yaml
+```
 
-Note: SMAPE is bounded between 0% and 200%. Lower values indicate better performance. Leaderboard Information:
+### Offline inference
 
-Public Leaderboard: During the challenge, rankings will be based on 25K samples from the test set to provide real-time feedback on your model's performance.
-Final Rankings: The final decision will be based on performance on the complete 75K test set along with provided documentation of the proposed approach by the teams.
+```bash
+python main.py inference --config configs/inference/inference.yaml
+```
 
-Submission Requirements:
+### Ensemble-only pipeline
 
-    Upload a test_out.csv file in the Portal with the exact same formatting as sample_test_out.csv
+```bash
+python main.py ensemble --config configs/model/ensemble.yaml
+```
 
-    All participating teams must also provide a 1-page document describing:
+### Quick experiment run
 
-    - Methodology used
-    - Model architecture/algorithms selected
-    - Feature engineering techniques applied
-    - Any other relevant information about the approach
-    - Note: A sample template for this documentation is provided in Documentation_template.md
+```bash
+python main.py quickrun
+```
 
-Academic Integrity and Fair Play:
-⚠ STRICTLY PROHIBITED: External Price Lookup
+## 6) Serving (Local)
 
-Participants are STRICTLY NOT ALLOWED to obtain prices from the internet, external databases, or any sources outside the provided dataset. This includes but is not limited to:
+Start API:
 
-    Web scraping product prices from e-commerce websites
-    Using APIs to fetch current market prices
-    Manual price lookup from online sources
-    Using any external pricing databases or services
+```bash
+uvicorn src.serving.app:app --host 0.0.0.0 --port 8000
+```
 
-Enforcement:
+Health and readiness:
 
-    All submitted approaches, methodologies, and code pipelines will be thoroughly reviewed and verified
-    Any evidence of external price lookup or data augmentation from internet sources will result in immediate disqualification
+```bash
+curl http://127.0.0.1:8000/healthz
+curl http://127.0.0.1:8000/readyz
+```
 
-Fair Play: This challenge is designed to test your machine learning and data science skills using only the provided training data. External price lookup defeats the purpose of the challenge.
+Prediction example:
 
-Tips for Success:
+```bash
+curl -X POST "http://127.0.0.1:8000/v1/predict" \
+    -H "Content-Type: application/json" \
+    -d '{
+                "records": [
+                    {"unique_identifier": 1, "Description": "Organic green tea 20 bags", "image_path": ""}
+                ]
+            }'
+```
 
-    Consider both textual features (catalog_content) and visual features (product images)
-    Explore feature engineering techniques for text and image data
-    Consider ensemble methods combining different model types
-    Pay attention to outliers and data preprocessing
+## 7) Artifacts and Outputs
+
+Typical generated artifacts:
+
+- `experiments/models/` (fold models, stacker)
+- `experiments/oof/` (OOF matrix, model names)
+- `experiments/reports/` (comparison and stacker summaries)
+- `experiments/submissions/` (prediction files)
+
+## 8) CI and Quality Gates
+
+GitHub Actions workflow in `.github/workflows/ci.yml` runs:
+
+1. dependency installation,
+2. syntax gate (`compileall`),
+3. test gate (`pytest -q ci_cd/tests`),
+4. CLI smoke gate (`python main.py --help`).
+
+## 9) Data and Experiment Configs
+
+Use YAML configs under `configs/`:
+
+- `configs/training/` for training runs and CV behavior,
+- `configs/inference/` for inference inputs/outputs,
+- `configs/model/` for model-specific hyperparameters,
+- `configs/features/` for feature settings.
+
+The CLI automatically supports nested config sections (for example, `training:` and `inference:` blocks).
+
+## 10) Operational Notes
+
+- Designed as a modular ML codebase with production hardening underway.
+- Current serving stack is FastAPI baseline; low-latency production design should evolve with Redis-backed online feature lookup, Kafka event-driven updates, Docker/Kubernetes orchestration, and stronger monitoring/rollback automation.
+
+See:
+
+- `docs/DEVELOPER_ONBOARDING_AND_TECHNICAL_HANDOVER.md`
+- `docs/slo_latency_tiers.md`
+
+## 11) Contribution Workflow
+
+1. Create focused changes in one subsystem.
+2. Add/update tests under `ci_cd/tests` for behavior changes.
+3. Run local quality checks before PR.
+4. Keep config and artifact paths consistent with existing conventions.
+
+## 12) License and Usage
+
+This repository is intended for ML challenge work and production-learning workflows.
+Ensure model/data usage follows challenge rules and organizational policy.

@@ -8,3 +8,6 @@ torch>=1.12                      # optional, for BERT/fusion
 transformers>=4.20               # optional
 tqdm
 joblib
+fastapi>=0.110
+uvicorn>=0.29
+pytest>=7.0

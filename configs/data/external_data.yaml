@@ -1,5 +1,8 @@
-## external_data.yaml
+# External datasets to merge for extra features
 external:
-  provider: example_provider
-  path: data/external
+  price_history_csv: "data/external/price_history.csv"
+  category_metadata_csv: "data/external/category_metadata.csv"
 
+merge_keys:
+  - "unique_identifier"
+  - "category_id"

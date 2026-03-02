@@ -1,10 +1,6 @@
-## all_features.yaml
-features:
-  text_method: tfidf  # options: tfidf, sbert
-  numeric: true
-  parsed: true
-  image_embeddings: false
-  text_embeddings: false
-  select_features: false
-  select_method: lasso  # options: lasso, tree, none
-
+all_features:
+  combine_text: true
+  combine_numeric: true
+  combine_parsed: true
+  combine_image_embeddings: true
+  feature_cache: "data/processed/features.joblib"

@@ -3,3 +3,5 @@ __pycache__/
 .env
 data/
 notebooks/.ipynb_checkpoints
+logs/
+models/

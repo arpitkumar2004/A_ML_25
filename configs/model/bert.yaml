@@ -1,28 +1,9 @@
-## bert.yaml
 model:
-  name: bert_regressor
-  params:
-    pretrained_model_name: "bert-base-uncased"
-    max_length: 128
-    batch_size: 16
-    epochs: 3
-    learning_rate: 2e-5
-    weight_decay: 0.01
-    warmup_steps: 0
-    gradient_accumulation_steps: 1
-    device: "cuda"  # or "cpu"
-    random_seed: 42
-    verbose: 1
-    output_dir: "experiments/models/bert_model"
-    logging_dir: "experiments/logs/bert_logs"
-    save_steps: 100
-    eval_steps: 100
-    evaluation_strategy: "steps"  # or "epoch"
-    save_total_limit: 2
-    load_best_model_at_end: true
-    metric_for_best_model: "smape"
-    greater_is_better: false
-    target_transform: log1p  # options: log1p, none
-    n_splits: 3  # number of CV folds
-    stratified: false  # whether to use stratified splitting for regression
-    stratify_bins: 10  # number of bins for stratification if stratified is
+  type: "bert"
+  pretrained_model_name: "sentence-transformers/all-MiniLM-L6-v2"
+  max_length: 128
+  batch_size: 16
+  epochs: 3
+  learning_rate: 2e-5
+  freeze_encoder: false
+  device: "cuda"

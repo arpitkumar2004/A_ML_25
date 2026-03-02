@@ -1,23 +1,58 @@
 """Feature parsing helpers (counts, weights)."""
-import numpy as np
-import pandas as pd
+# src/data/parse_features.py
+from typing import Optional
 import re
+import pandas as pd
+import numpy as np
 
 
+class Parser:
+    """
+    Extract structured pieces from description text: value and unit parsing,
+    counts of items, ounces, weights, etc.
+    """
 
-def parse_ounces(text):
-    # returns total ounces found in text (simple)
-    if not isinstance(text, str):
-        return 0.0
-    matches = re.findall(r'(\d+(?:\.\d+)?)\s*oz', text, flags=re.I)
-    vals = [float(m) for m in matches]
-    return sum(vals)
+    @staticmethod
+    def parse_ounces(text: Optional[str]) -> float:
+        if not text:
+            return 0.0
+        # match patterns like "7 oz", "7.0 oz", "7oz"
+        matches = re.findall(r"(\d+(?:\.\d+)?)\s*oz\b", text, flags=re.I)
+        try:
+            return float(sum(map(float, matches))) if matches else 0.0
+        except Exception:
+            return 0.0
 
-def add_parsed_features(df, text_col='Description'):
-    df = df.copy()
-    df["desc_clean_len"] = df[text_col].astype(str).apply(len)
-    df["parsed_ounces"] = df[text_col].astype(str).apply(parse_ounces)
-    return df
+    @staticmethod
+    def parse_value_unit(text: Optional[str]) -> (float, str):
+        """
+        Attempt to extract first occurring value + unit pair, e.g. '7 oz', '2 pack', '500 g'.
+        Returns (value, unit) or (0.0, '')
+        """
+        if not text:
+            return 0.0, ""
+        # regex to capture number + unit (word characters or % or g/ml/oz)
+        match = re.search(r"(\d+(?:\.\d+)?)[\s\-]*(mg|g|kg|oz|ml|l|pack|count|ct|bars|pcs|pieces|servings|ounce|pound|lb|ozs)?\b", text, flags=re.I)
+        if match:
+            val = float(match.group(1))
+            unit = match.group(2) if match.group(2) else ""
+            return val, unit.lower()
+        return 0.0, ""
+
+    @staticmethod
+    def add_parsed_features(df: pd.DataFrame, text_col: str = "Description") -> pd.DataFrame:
+        df = df.copy()
+        df[f"{text_col}_clean_len"] = df[text_col].fillna("").astype(str).apply(len)
+        df["parsed_ounces"] = df[text_col].fillna("").astype(str).apply(Parser.parse_ounces)
+        vals_units = df[text_col].fillna("").astype(str).apply(Parser.parse_value_unit)
+        df["parsed_value"] = vals_units.apply(lambda x: x[0]).astype(float)
+        df["parsed_unit"] = vals_units.apply(lambda x: x[1]).astype(str)
+        # derived: value normalized (will convert units later)
+        df["parsed_value_log1p"] = np.log1p(df["parsed_value"].fillna(0.0).astype(float))
+        return df
+
+
+# Seperater line
 
 def extract_catalog_fields(catalog_content):
     """
@@ -259,4 +294,5 @@ class CatalogProcessor:
 
 # # 4. Display the result
 # print(processed_df)
+
 

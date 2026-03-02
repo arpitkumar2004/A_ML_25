@@ -1,17 +1,8 @@
-## ensemble.yaml
-model:
-  name: ensemble
-  params:
-    models:
-      - lgbm
-      - bert
-    weights:
-      - 0.5
-      - 0.5
-    average_method: mean  # options: mean, median
-    target_transform: log1p  # options: log1p, none 
-    n_splits: 3  # number of CV folds
-    stratified: false  # whether to use stratified splitting for regression
-    stratify_bins: 10  # number of bins for stratification if stratified is true
-    random_seed: 42
-
+ensemble:
+  method: "stacking"  # options: stacking, averaging
+  base_models: ["Linear", "RF", "LGBM", "XGB", "Cat"]
+  meta_model: "ridge"  # or "lgbm"
+  meta_params:
+    alpha: 1.0
+  n_splits: 5
+  random_state: 42

@@ -1,1 +1,25 @@
-# CI/CD pipeline config placeholder for other CI systems\n
+pipeline:
+	name: aml25-quality-gates
+	triggers:
+		- push
+		- pull_request
+
+	stages:
+		- name: setup
+			steps:
+				- python -m pip install --upgrade pip
+				- pip install -r requirements.txt
+				- pip install pytest
+
+		- name: syntax
+			steps:
+				- python -m compileall src main.py
+
+		- name: unit_tests
+			steps:
+				- pytest -q ci_cd/tests
+
+		- name: smoke
+			steps:
+				- python main.py --help
+

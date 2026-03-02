@@ -1,12 +1,4 @@
-## parsed_features.yaml
-parsed:
-  features:
-    - item_name
-    - prod_description
-    - bullet_points
-    - value
-    - unit
-
-  fillna: true
-  encode: true
-
+parsed_features:
+  columns_to_parse: ["Value", "Unit"]
+  output_cols: ["parsed_value", "parsed_unit"]
+  cache_path: "data/processed/parsed_features.joblib"

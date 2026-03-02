@@ -1,6 +1,161 @@
-import joblib
-def load_model(path):
-    return joblib.load(path)
+# src/inference/predict.py
+import os
+from typing import Optional, Any, Dict
+import numpy as np
+import pandas as pd
 
-def predict_with_model(model, X):
-    return model.predict(X)
+from ..utils.io import IO
+from ..utils.logging_utils import LoggerFactory
+from ..features.build_features import FeatureBuilder
+from ..features.dimensionality import DimReducer
+from ..models.stacker import Stacker
+from ..models.base_model import BaseModel
+
+logger = LoggerFactory.get("predict")
+
+class PredictPipeline:
+    """
+    Unified inference pipeline:
+      - Accepts raw dataframe (same schema as training)
+      - Builds features (using cached text/image embeddings if present)
+      - Applies dimensionality reduction (PCA/UMAP) if a reducer is available
+      - Loads base models and stacker and produces final predictions
+    """
+
+    def __init__(self,
+                 text_cfg: Dict = None,
+                 image_cfg: Dict = None,
+                 numeric_cfg: Dict = None,
+                 feature_cache: str = "data/processed/features.joblib",
+                 dim_cache: str = "data/processed/dimred.joblib",
+                 models_dir: str = "experiments/models",
+                 oof_meta_path: str = "experiments/oof/model_names.joblib",
+                 stacker_path: str = "experiments/models/stacker.joblib"):
+        self.text_cfg = text_cfg or {"method": "sbert", "cache_path":"data/processed/text_embeddings.joblib"}
+        self.image_cfg = image_cfg or {"cache_path":"data/processed/image_embeddings.joblib"}
+        self.numeric_cfg = numeric_cfg or {"scaler_path":"data/processed/numeric_scaler.joblib"}
+        self.feature_cache = feature_cache
+        self.dim_cache = dim_cache
+        self.models_dir = models_dir
+        self.oof_meta_path = oof_meta_path
+        self.stacker_path = stacker_path
+
+        # lazy attributes
+        self._feature_builder = FeatureBuilder(self.text_cfg, self.image_cfg, self.numeric_cfg, output_cache=self.feature_cache)
+        self._dim_reducer = None
+        self._base_models = None
+        self._model_names = None
+        self._stacker = None
+
+    def _load_dim_reducer(self):
+        if self._dim_reducer is None:
+            if os.path.exists(self.dim_cache):
+                self._dim_reducer = DimReducer(cache_path=self.dim_cache)
+                # try to load model from disk (DimReducer loads when transform called)
+                logger.info(f"Dim reducer configured to use cache: {self.dim_cache}")
+            else:
+                logger.info("No dim reducer cache found; reducer will not be applied.")
+                self._dim_reducer = None
+        return self._dim_reducer
+
+    def _discover_base_models(self):
+        # Discover saved fold models in models_dir and build a mapping name -> list(paths)
+        model_files = [f for f in os.listdir(self.models_dir) if f.endswith(".joblib") or f.endswith(".pkl")]
+        # We expect filenames like 'fold_{i}_LGBModel.joblib' created by Trainer earlier
+        models_by_type = {}
+        for f in model_files:
+            p = os.path.join(self.models_dir, f)
+            # attempt to parse model type from filename last segment
+            parts = f.split("_")
+            # fallback: take last token before extension
+            model_type = parts[-1].split(".")[0]
+            models_by_type.setdefault(model_type, []).append(p)
+        logger.info(f"Found base model artifacts: { {k: len(v) for k,v in models_by_type.items()} }")
+        self._base_models = models_by_type
+        # If model names metadata exists, use that
+        if os.path.exists(self.oof_meta_path):
+            try:
+                self._model_names = IO.load_pickle(self.oof_meta_path)
+            except Exception:
+                self._model_names = None
+
+    def _load_stacker(self):
+        if os.path.exists(self.stacker_path):
+            self._stacker = Stacker(method="ridge", save_path=self.stacker_path)
+            self._stacker.load(self.stacker_path)
+            logger.info(f"Loaded stacker from {self.stacker_path}")
+        else:
+            logger.info("No stacker model found at path; ensemble averaging will be used.")
+            self._stacker = None
+
+    def _predict_with_saved_models(self, X):
+        """
+        For each model type (e.g., LGBModel), load each fold model and average predictions.
+        Returns a DataFrame of shape (n_samples, n_model_types)
+        """
+        if self._base_models is None:
+            self._discover_base_models()
+        preds = {}
+        for model_type, paths in self._base_models.items():
+            # load each fold and average
+            preds_per_fold = []
+            for p in paths:
+                try:
+                    m = IO.load_pickle(p)
+                    preds_per_fold.append(m.predict(X))
+                except Exception as e:
+                    logger.warning(f"Loading/predicting with model {p} failed: {e}")
+            if preds_per_fold:
+                avg_pred = np.mean(np.vstack(preds_per_fold), axis=0)
+                preds[model_type] = avg_pred
+        if not preds:
+            raise RuntimeError("No base model predictions available.")
+        df_preds = pd.DataFrame(preds)
+        return df_preds
+
+    def predict(self, df: pd.DataFrame, text_col: str = "Description", image_col: str = "image_path", force_rebuild_features: bool = False):
+        """
+        Input: df with same schema as training (unique_identifier, Description, Price optional, image_path optional)
+        Returns: numpy array of final predictions (same order as df)
+        """
+        if df is None or len(df) == 0:
+            raise ValueError("Empty dataframe passed to PredictPipeline.predict")
+
+        # Build features (reuses cached embeddings if available)
+        X_raw, meta = self._feature_builder.build(df, text_col=text_col, image_col=image_col, force_rebuild=force_rebuild_features)
+
+        # convert sparse -> dense if reducer requires it
+        X_dense = None
+        if hasattr(X_raw, "toarray") or hasattr(X_raw, "todense"):
+            try:
+                X_dense = np.asarray(X_raw.todense() if hasattr(X_raw, "todense") else X_raw.toarray())
+            except Exception:
+                X_dense = None
+        else:
+            X_dense = np.asarray(X_raw)
+
+        # Apply dim reducer if available
+        reducer = self._load_dim_reducer()
+        if reducer is not None and X_dense is not None:
+            try:
+                X_final = reducer.transform(X_dense)
+            except Exception as e:
+                logger.warning(f"Dim reducer transform failed: {e}; using dense features instead.")
+                X_final = X_dense
+        else:
+            X_final = X_dense if X_dense is not None else X_raw
+
+        # Load base models and compute predictions
+        self._discover_base_models()
+        df_base_preds = self._predict_with_saved_models(X_final)
+        logger.info(f"Computed base model predictions with columns: {list(df_base_preds.columns)}")
+
+        # Load stacker if available
+        self._load_stacker()
+        if self._stacker is not None:
+            final_preds = self._stacker.predict(df_base_preds.values)
+        else:
+            # average base models
+            final_preds = df_base_preds.mean(axis=1).values
+
+        return final_preds

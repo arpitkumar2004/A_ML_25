@@ -1,23 +1,29 @@
-## final_train.yaml
-data:
-  base: true
-  processed: false
 training:
-  cv_stratified: true
-model:
-  ensemble: true
-features:
-  all_features: true
-  numeric: true
-  parsed: true
-  text: true
-  text_method: tfidf
-  image_embeddings: false
-  text_embeddings: false
-  select_features: false
-  select_method: lasso
-  select_top_k: 500
-model_params:
-  lgbm: true
-  bert: true
-  ensemble: true
+  run_full_training: true
+  sample_frac: 1.0
+  target_col: "Price"
+  text_col: "Description"
+  image_col: "image_path"
+  id_col: "unique_identifier"
+
+  models:
+    - "Linear"
+    - "RF"
+    - "LGBM"
+    - "XGB"
+    - "Cat"
+
+  feature_cache: "data/processed/features.joblib"
+  dim_cache: "data/processed/dimred.joblib"
+  use_dim_cache: true
+
+  trainer:
+    n_splits: 5
+    random_state: 42
+
+  stacker:
+    run_stacker: true
+    method: "ridge"
+    n_splits: 5
+    params:
+      alpha: 1.0

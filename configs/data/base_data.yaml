@@ -1,16 +1,19 @@
-## base_data.yaml
-dataset:
-  name: base
-  path: data/raw
-  target: price
-  sample: 0.1  # use 10% of data for quick check
+# Base dataset paths and preprocessing
+data:
+  raw_path: "data/raw/catalog.csv"
+  interim_path: "data/interim"
+  processed_path: "data/processed"
+  external_path: "data/external"
+  sample_frac: 1.0   # fraction of data to load for quick experiments
+  random_state: 42
+
+columns:
+  text_col: "Description"
+  image_col: "image_path"
+  target_col: "Price"
+  id_col: "unique_identifier"
 
 preprocessing:
-  fill_na: true
-  normalise: false
-
-# data_path: "data/processed/train.csv"
-# text_column: "Description"
-# target_column: "Price"
-# sample_frac: 0.1        # use 10% of data for quick check
-# random_state: 42
+  text_cleaning: true
+  parse_features: true
+  numeric_scaler: "standard"   # options: minmax, standard

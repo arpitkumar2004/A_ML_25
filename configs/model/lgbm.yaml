@@ -1,27 +1,11 @@
-experiment_name: lgbm_baseline
-data:
-  train_path: data/raw/train.csv
-  id_col: sample_id
-  text_col: catalog_content
-  target_col: price
-features:
-  use_text: true
-  use_parsed: true
-  text_method: tfidf
-training:
-  cv_folds: 3
-  random_seed: 42
-  target_transform: log1p
 model:
-  objective: regression
-  num_boost_round: 1000
-  early_stopping_rounds: 50
+  type: "lgbm"
   params:
-    metric: smape
-    objective: regression
-    num_threads: 4
+    n_estimators: 500
     learning_rate: 0.05
-    num_leaves: 128
-    feature_fraction: 0.8
-    bagging_fraction: 0.8
-    bagging_freq: 5
+    max_depth: -1
+    num_leaves: 31
+    subsample: 0.8
+    colsample_bytree: 0.8
+    random_state: 42
+    n_jobs: -1

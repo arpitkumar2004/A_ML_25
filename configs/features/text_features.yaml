@@ -1,10 +1,6 @@
-text_method: tfidf
-tfidf:
-  max_features: 500
-  ngram_range: [1,2]
-sbert:
-  model_name: "all-MiniLM-L6-v2"
-  batch_size: 64
-  normalize: true
+text_features:
+  method: "sbert"  # options: tfidf, sbert, bert
+  model_name: "sentence-transformers/all-MiniLM-L6-v2"
   max_length: 128
-  device: "cpu"  # or "cuda"  
+  cache_path: "data/processed/text_embeddings.joblib"
+  normalize: true

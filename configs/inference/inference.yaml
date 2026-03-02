@@ -1,42 +1,15 @@
-## inference.yaml
-data:
-  name: base
-  path: data/raw
-  target: price
-  sample: 0.0  # use full data for inference
-preprocessing:
-  fill_na: true
-  normalise: false
-model:
-  name: lgbm
-  path: experiments/models/lgbm_model.pkl
-features:
-  text_method: tfidf  # options: tfidf, sbert
-  numeric: true
-  parsed: true
-  image_embeddings: false
-  text_embeddings: false
-  select_features: false
-  select_method: lasso  # options: lasso, tree, none  
 inference:
-  batch_size: 1024
-  output_path: experiments/predictions/inference_results.csv
-  save_oof: false
-  oof_path: experiments/predictions/oof_predictions.csv
-  target_transform: log1p  # options: log1p, none
-  id_col: sample_id
-  text_col: catalog_content
-  target_col: price
-  features_to_save: [sample_id, catalog_content, price, prediction]  # columns to save in output
-  random_seed: 42
-  device: "cpu"  # or "cuda"
-  num_workers: 4
-  verbose: 1
-  model_type: regression  # options: regression, classification
-  classification_threshold: 0.5  # threshold for binary classification
-  metrics: [smape]  # options: rmse, smape, mae for regression; accuracy, f1, roc_auc for classification
-  cv_folds: 3  # number of CV folds used during training, for OOF predictions
-  ensemble: false  # whether to average predictions from multiple folds
-  average_method: mean  # options: mean, median
-
-
+  input_path: "data/test/catalog_test.csv"
+  output_path: "experiments/submissions/submission.csv"
+  text_col: "Description"
+  image_col: "image_path"
+  id_col: "unique_identifier"
+  pred_col: "predicted_price"
+  feature_cache: "data/processed/features.joblib"
+  dim_cache: "data/processed/dimred.joblib"
+  models_dir: "experiments/models"
+  oof_meta_path: "experiments/oof/model_names.joblib"
+  stacker_path: "experiments/models/stacker.joblib"
+  target_transform: "log1p"  # if model trained on log1p
+  round: true
+  min_value: 0.0

@@ -1,3 +1,4 @@
+# src/features/text_embeddings.py
 import re
 import numpy as np
 import pandas as pd
@@ -6,8 +7,114 @@ from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, normalize
 from scipy import sparse
+from scipy.sparse import csr_matrix
 import warnings
+from typing import Optional, Tuple, Iterable
+import os
+import numpy as np
+import joblib
+from ..utils.io import IO
+from ..utils.logging_utils import LoggerFactory
+from ..data.text_cleaning import TextCleaner
 warnings.filterwarnings("ignore")
+
+logger = LoggerFactory.get("text_embeddings")
+
+# Try to import sentence-transformers; fall back to TF-IDF if not available
+try:
+    from sentence_transformers import SentenceTransformer
+except Exception:
+    SentenceTransformer = None
+
+class TextEmbedder:
+    """
+    Create or load text embeddings. Supports two modes:
+      - 'sbert' : sentence-transformers model (dense embeddings)
+      - 'tfidf' : TF-IDF sparse features
+    Usage:
+      te = TextEmbedder(method='sbert', model_name='all-MiniLM-L6-v2', cache_path='data/processed/text_emb.npy')
+      X = te.fit_transform(texts)
+    """
+    def __init__(self,
+                 method: str = "sbert",
+                 model_name: str = "all-MiniLM-L6-v2",
+                 cache_path: Optional[str] = "data/processed/text_embeddings.joblib",
+                 tfidf_max_features: int = 5000,
+                 tfidf_ngram_range: Tuple[int,int] = (1,2)):
+        self.method = method.lower()
+        self.model_name = model_name
+        self.cache_path = cache_path
+        self.tfidf_max_features = tfidf_max_features
+        self.tfidf_ngram_range = tfidf_ngram_range
+        self._model = None
+        self._vectorizer = None
+
+    def _load_cache(self):
+        if self.cache_path and os.path.exists(self.cache_path):
+            logger.info(f"Loading cached text features from {self.cache_path}")
+            return joblib.load(self.cache_path)
+        return None
+
+    def _save_cache(self, obj):
+        if not self.cache_path:
+            return
+        IO.save_pickle(obj, self.cache_path)
+        logger.info(f"Saved text features to {self.cache_path}")
+
+    def _init_sbert(self):
+        if SentenceTransformer is None:
+            raise ImportError("sentence-transformers not installed. Install to use 'sbert' method.")
+        if self._model is None:
+            self._model = SentenceTransformer(self.model_name)
+            logger.info(f"Loaded SentenceTransformer: {self.model_name}")
+
+    def _init_tfidf(self, sample_texts: Iterable[str]):
+        if self._vectorizer is None:
+            self._vectorizer = TfidfVectorizer(max_features=self.tfidf_max_features,
+                                               ngram_range=self.tfidf_ngram_range,
+                                               stop_words='english')
+            self._vectorizer.fit(sample_texts)
+            logger.info("Fitted TF-IDF vectorizer")
+
+    def fit_transform(self, texts: Iterable[str], use_cache: bool = True):
+        """
+        Fit (if needed) and transform texts into embeddings or tfidf matrix.
+        Returns dense np.ndarray (for sbert) or scipy csr_matrix (for tfidf).
+        """
+        texts = [TextCleaner.basic(t) for t in texts]
+        cached = self._load_cache() if use_cache else None
+        if cached is not None:
+            return cached
+
+        if self.method == "sbert":
+            self._init_sbert()
+            with logger.handlers and logger:  # ensure logger exists; no-op context
+                pass
+            emb = self._model.encode(texts, show_progress_bar=False, convert_to_numpy=True, batch_size=64)
+            self._save_cache(emb)
+            return emb
+        elif self.method == "tfidf":
+            self._init_tfidf(texts)
+            X = self._vectorizer.transform(texts)
+            self._save_cache(X)
+            return X
+        else:
+            raise ValueError(f"Unknown text embedding method: {self.method}")
+
+    def transform(self, texts: Iterable[str]):
+        # Pure transform assuming model/vectorizer already initialized
+        texts = [TextCleaner.basic(t) for t in texts]
+        if self.method == "sbert":
+            if self._model is None:
+                self._init_sbert()
+            return self._model.encode(texts, show_progress_bar=False, convert_to_numpy=True, batch_size=64)
+        else:
+            if self._vectorizer is None:
+                raise RuntimeError("TF-IDF vectorizer not fitted. Call fit_transform first.")
+            return self._vectorizer.transform(texts)
+
+
+# Seperater line
 
 def embeded_text_features(df):
     """
