@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 from ..utils.logging_utils import LoggerFactory
 from ..utils.io import IO
-from ..utils.metrics import rmse, mae, r2, smape
+from ..training.metrics import rmse, mae, r2, smape
 from ..training.utils_cv import make_folds
 import os
 import joblib

@@ -11,3 +11,5 @@ joblib
 fastapi>=0.110
 uvicorn>=0.29
 pytest>=7.0
+pillow>=9.0
+requests>=2.28

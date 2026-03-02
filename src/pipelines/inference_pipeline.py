@@ -30,7 +30,12 @@ def run_inference_pipeline(cfg: Dict[str, Any]) -> str:
         oof_meta_path=cfg.get("oof_meta_path", "experiments/oof/model_names.joblib"),
         stacker_path=cfg.get("stacker_path", "experiments/models/stacker.joblib")
     )
-    preds = pp.predict(df_in, text_col=cfg.get("text_col","Description"), image_col=cfg.get("image_col","image_path"))
+    preds = pp.predict(
+        df_in,
+        text_col=cfg.get("text_col", "Description"),
+        image_col=cfg.get("image_col", "image_path"),
+        force_rebuild_features=cfg.get("force_rebuild_features", False),
+    )
     # optional inverse transforms
     if cfg.get("target_transform") == "log1p":
         preds = Postprocessor.invert_log1p(preds)

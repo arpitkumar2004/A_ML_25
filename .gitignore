@@ -5,3 +5,4 @@ data/
 notebooks/.ipynb_checkpoints
 logs/
 models/
+*.joblib

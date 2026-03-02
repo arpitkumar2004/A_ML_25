@@ -1,0 +1,38 @@
+{
+  "smoke_config": {
+    "n_train": 200,
+    "n_test": 50,
+    "model": "linear",
+    "seed": 42
+  },
+  "timings_seconds": {
+    "load_train_sample": 3.7161,
+    "load_test_sample": 2.5058,
+    "sanity_parse_train": 0.0393,
+    "feature_build_only": 238.8371,
+    "dim_reduction_only": 0.1748,
+    "train_pipeline": 195.9128,
+    "inference_pipeline": 63.6673
+  },
+  "complexity": {
+    "load_and_sample": "O(n)",
+    "parse_features": "O(n * L), L=text length",
+    "build_text_tfidf": "O(nnz) approx, nnz=non-zero token counts",
+    "build_image_embeddings": "O(n * d_img) if model available; O(n) with zero-fallback",
+    "build_numeric": "O(n * p_num)",
+    "dimensionality_reduction_pca": "O(n * d * k)",
+    "cv_training_linear_kfold": "O(k_folds * (n_train * d^2 + d^3))",
+    "inference_predict": "O(n_test * d)",
+    "note": "For this smoke check n_train=200, n_test=50; timing is for operational validation, not model optimization."
+  },
+  "validation": {
+    "output_exists": true,
+    "prediction_rows": 50,
+    "expected_rows": 50,
+    "prediction_columns": [
+      "unique_identifier",
+      "predicted_price"
+    ],
+    "status": "PASS"
+  }
+}

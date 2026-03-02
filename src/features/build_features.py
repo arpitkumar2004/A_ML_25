@@ -1,5 +1,6 @@
 # src/features/build_features.py
 from typing import Optional, Tuple, List, Any
+import os
 import numpy as np
 import pandas as pd
 from scipy import sparse
@@ -43,16 +44,36 @@ class FeatureBuilder:
             cached = IO.load_pickle(self.output_cache)
             return cached["X"], cached["meta"]
 
+        # When forcing rebuild, bypass all sub-caches to avoid stale-row mismatches.
+        use_sub_cache = not force_rebuild
+
         # 1) Text embeddings
         texts = df[text_col].fillna("").astype(str).tolist()
-        X_text = self.text_embedder.fit_transform(texts, use_cache=True)
+        X_text = self.text_embedder.fit_transform(texts, use_cache=use_sub_cache)
 
         # 2) Image embeddings
         if image_col in df.columns:
             image_paths = df[image_col].fillna("").astype(str).tolist()
-            X_image = self.image_embedder.embed(image_paths, use_cache=True)
+            X_image = self.image_embedder.embed(image_paths, use_cache=use_sub_cache)
         else:
             X_image = np.zeros((len(df), 512), dtype=float)  # fallback
+
+        # Guard against stale caches producing mismatched row counts.
+        expected_rows = len(df)
+        text_rows = X_text.shape[0] if hasattr(X_text, "shape") else expected_rows
+        image_rows = X_image.shape[0] if hasattr(X_image, "shape") else expected_rows
+        if text_rows != expected_rows or image_rows != expected_rows:
+            logger.warning(
+                "Detected feature row mismatch (expected=%s, text=%s, image=%s). Recomputing without sub-cache.",
+                expected_rows,
+                text_rows,
+                image_rows,
+            )
+            X_text = self.text_embedder.fit_transform(texts, use_cache=False)
+            if image_col in df.columns:
+                X_image = self.image_embedder.embed(image_paths, use_cache=False)
+            else:
+                X_image = np.zeros((len(df), 512), dtype=float)
 
         # 3) Numeric features
         # allow explicit numeric cols or auto-detect

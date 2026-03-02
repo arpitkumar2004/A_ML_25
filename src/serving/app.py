@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -7,6 +8,33 @@ from pydantic import BaseModel, Field
 
 from ..inference.predict import PredictPipeline
 from ..inference.postprocess import Postprocessor
+
+
+def _load_env_file() -> None:
+    """Best-effort .env loader for local serving runs.
+
+    This avoids requiring python-dotenv and makes `uvicorn src.serving.app:app`
+    pick up tokens/config from project-root `.env`.
+    """
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    if not env_path.exists():
+        return
+
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+    # Backward-compatible aliasing used by some HF clients/tools
+    hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
+    if hf_token:
+        os.environ.setdefault("HF_TOKEN", hf_token)
+        os.environ.setdefault("HUGGING_FACE_HUB_TOKEN", hf_token)
 
 
 class PredictRequest(BaseModel):
@@ -66,6 +94,7 @@ app = FastAPI(title="A_ML_25 Inference Service", version="1.0.0")
 
 @app.on_event("startup")
 def on_startup():
+    _load_env_file()
     service.initialize()
 
 

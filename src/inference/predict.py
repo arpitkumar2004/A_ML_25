@@ -6,6 +6,7 @@ import pandas as pd
 
 from ..utils.io import IO
 from ..utils.logging_utils import LoggerFactory
+from ..data.parse_features import Parser
 from ..features.build_features import FeatureBuilder
 from ..features.dimensionality import DimReducer
 from ..models.stacker import Stacker
@@ -60,7 +61,10 @@ class PredictPipeline:
 
     def _discover_base_models(self):
         # Discover saved fold models in models_dir and build a mapping name -> list(paths)
-        model_files = [f for f in os.listdir(self.models_dir) if f.endswith(".joblib") or f.endswith(".pkl")]
+        model_files = [
+            f for f in os.listdir(self.models_dir)
+            if (f.endswith(".joblib") or f.endswith(".pkl")) and f.startswith("fold_")
+        ]
         # We expect filenames like 'fold_{i}_LGBModel.joblib' created by Trainer earlier
         models_by_type = {}
         for f in model_files:
@@ -120,6 +124,9 @@ class PredictPipeline:
         """
         if df is None or len(df) == 0:
             raise ValueError("Empty dataframe passed to PredictPipeline.predict")
+
+        if text_col in df.columns:
+            df = Parser.add_parsed_features(df, text_col=text_col)
 
         # Build features (reuses cached embeddings if available)
         X_raw, meta = self._feature_builder.build(df, text_col=text_col, image_col=image_col, force_rebuild=force_rebuild_features)

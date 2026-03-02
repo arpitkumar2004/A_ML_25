@@ -1,5 +1,6 @@
 # src/features/numeric_features.py
 from typing import Optional, List
+import os
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
