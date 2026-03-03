@@ -57,7 +57,7 @@ flowchart LR
 
     C --> J[src/serving/app.py\nFastAPI Online Serving]
     F --> J
-    J --> K[/healthz /readyz /v1/predict]
+    J --> K["/healthz /readyz /v1/predict"]
 
     L[main.py CLI] --> D
     L --> G
