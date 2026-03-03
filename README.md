@@ -39,6 +39,46 @@ experiments/                   # Artifacts: models, oof, logs, reports, submissi
 
 ## 3) Core Architecture
 
+### System structure (block diagram)
+
+```mermaid
+flowchart LR
+    A[Raw Data\ntrain.csv / test.csv] --> B[src/data\nLoad + Parse + Clean]
+    B --> C[src/features\nText/Image/Numeric Features]
+
+    C --> D[src/pipelines/train_pipeline.py\nTraining Orchestration]
+    D --> E[src/training + src/models\nCV Models + Optional Stacker]
+    E --> F[experiments/\nModels + OOF + Reports]
+
+    C --> G[src/pipelines/inference_pipeline.py\nBatch Inference]
+    F --> G
+    G --> H[src/inference/postprocess.py\nClip / Round / Submission Build]
+    H --> I[data/submission + experiments/submissions\nPrediction CSV]
+
+    C --> J[src/serving/app.py\nFastAPI Online Serving]
+    F --> J
+    J --> K[/healthz /readyz /v1/predict]
+
+    L[main.py CLI] --> D
+    L --> G
+    L --> J
+
+    M[CI: .github/workflows/ci.yml] --> N[compileall]
+    M --> O[pytest ci_cd/tests]
+    M --> P[python main.py --help]
+```
+
+### Module mapping
+
+- Data ingestion and normalization: `src/data/`
+- Multimodal feature construction: `src/features/`
+- Pipeline orchestration: `src/pipelines/`
+- Model training and ensembling: `src/training/`, `src/models/`
+- Offline inference and output formatting: `src/inference/`
+- Online API serving: `src/serving/app.py`
+- Entry-point command interface: `main.py`
+- Quality gates and regression checks: `ci_cd/tests/`, `.github/workflows/ci.yml`
+
 ### Offline path (training)
 
 1. Load dataset
