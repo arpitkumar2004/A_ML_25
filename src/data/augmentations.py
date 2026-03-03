@@ -1,8 +1,6 @@
 # src/data/augmentations.py
 from typing import Any
 
-# Placeholder augmentation module.
-# For images, prefer albumentations or torchvision transforms in actual impl.
 
 class Augmentations:
     @staticmethod

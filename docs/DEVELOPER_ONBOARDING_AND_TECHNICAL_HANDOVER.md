@@ -369,6 +369,82 @@ These are the primary next workstreams for platform hardening.
 
 ---
 
+## 10) Target Future Development Plan (Gap Closure Roadmap)
+
+This section converts the current high-quality ML challenge architecture into a production-grade, hyper-scalable platform plan.
+
+### 10.1 What is missing today (and why it matters)
+
+1. **Feature Store integration (Feast/Hopsworks)**
+  - Current: feature logic is script-driven and local-cache-heavy.
+  - Gap: no unified online/offline feature registry and no enforced point-in-time retrieval contracts.
+  - Impact: higher risk of training-serving skew and lower reproducibility under changing data.
+
+2. **Distributed training + hyperparameter optimization (Ray/Kubeflow + Optuna/Ray Tune)**
+  - Current: local/single-node style orchestration around `train_pipeline.py`.
+  - Gap: no cluster-native distributed training orchestration and limited global HPO coverage.
+  - Impact: slower experimentation loop and reduced ability to find globally optimal model settings.
+
+3. **Asynchronous inference via queue/broker (Redis/RabbitMQ/Kafka)**
+  - Current: synchronous FastAPI request/response serving path.
+  - Gap: no task-queue pattern for heavy multimodal computations.
+  - Impact: API saturation risk at traffic spikes; lower tail-latency stability.
+
+4. **Model registry + automated versioning (MLflow/W&B Registry)**
+  - Current: artifacts persisted under `experiments/`.
+  - Gap: no central lifecycle controls across Staging/Production/Archived and champion-challenger policy gates.
+  - Impact: promotion/rollback and governance rely too much on manual discipline.
+
+5. **Drift detection + observability automation (Evidently/Arize + metrics stack)**
+  - Current: strong guidance exists, but not fully wired end-to-end.
+  - Gap: no always-on production drift service with alert-to-retrain orchestration hooks.
+  - Impact: delayed detection of data/concept drift and slower quality recovery.
+
+### 10.2 Current vs Target Architecture
+
+| Capability | Current State | Target Scalable Production State |
+| --- | --- | --- |
+| Data Logic | Local CSV parsing and file-based orchestration | Distributed ETL and governed data pipelines (Spark/Snowflake/Lakehouse) |
+| Feature Management | `src/features` scripts + local caches | Feature Store (online + offline) with point-in-time guarantees |
+| Inference | Synchronous REST API (FastAPI) | Async serving (task queue + workers) + model server (Triton/BentoML pattern) |
+| Experimentation | YAML configs + local folders | MLflow/W&B tracking + registry + governed promotions |
+| Scaling Model | Primarily vertical | Horizontal autoscaling on Kubernetes (HPA/KEDA) |
+
+### 10.3 Phased implementation plan
+
+**Phase 1 (0-4 weeks): Foundation hardening**
+- Introduce MLflow tracking + model registry stages.
+- Add feature schema contracts and lineage metadata to every training/inference run.
+- Add drift metrics baseline dashboards (data + concept drift starters).
+
+**Phase 2 (4-8 weeks): Online/offline parity + async serving**
+- Integrate Feature Store (offline + online materialization).
+- Introduce asynchronous inference queue flow:
+  1. API validates payload,
+  2. API enqueues request and returns `task_id`,
+  3. worker pool computes heavy multimodal features/predictions,
+  4. result store serves completion retrieval.
+- Add Redis-backed hot-feature retrieval for low-latency path.
+
+**Phase 3 (8-12 weeks): Scale training and optimization**
+- Move HPO to Bayesian optimization with Optuna/Ray Tune.
+- Run distributed training and sweep orchestration with Ray/Kubeflow.
+- Establish repeatable champion-challenger evaluation workflow.
+
+**Phase 4 (12+ weeks): Full production operations**
+- Add SLO-bound canary automation and rollback triggers.
+- Wire drift-alert-to-retrain pipelines.
+- Add complete auditability: dataset snapshot, feature view hash, model version, deployment record.
+
+### 10.4 Success criteria for this roadmap
+
+- **Latency/SLO:** sustained P99 within target budget under load tests.
+- **Quality:** statistically significant offline+online metric stability across releases.
+- **Reliability:** automated rollback and recovery without manual firefighting.
+- **Governance:** full lineage from request -> feature version -> model version -> output.
+
+---
+
 ## Final Notes
 This repository now has a strong ML platform base and clear production direction. For the 1M+ DAU, P99 < 1s target, prioritize:
 

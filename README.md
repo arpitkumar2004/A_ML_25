@@ -238,10 +238,29 @@ The CLI automatically supports nested config sections (for example, `training:` 
 - Designed as a modular ML codebase with production hardening underway.
 - Current serving stack is FastAPI baseline; low-latency production design should evolve with Redis-backed online feature lookup, Kafka event-driven updates, Docker/Kubernetes orchestration, and stronger monitoring/rollback automation.
 
+### Target improvement roadmap (future plan)
+
+To move from challenge-grade ML workflows to production-grade, hyper-scalable architecture, the planned target includes:
+
+1. **Feature Store integration (Feast/Hopsworks)** for online/offline parity and point-in-time correctness.
+2. **Distributed training + Bayesian HPO** (`Ray`/`Kubeflow` + `Optuna`/`Ray Tune`) for stronger model search quality.
+3. **Asynchronous inference architecture** (`Redis`/`RabbitMQ`/`Kafka`) with `task_id`-based queue + worker execution.
+4. **Model registry lifecycle controls** (`MLflow`/`W&B`) with Champion/Challenger promotion flow.
+5. **Drift detection and observability automation** (`Evidently`/`Arize` + metrics/alerts) with retraining triggers.
+
+Current vs target trend:
+- Data logic: local CSV pipelines -> distributed ETL.
+- Feature management: script-level features -> governed online/offline feature store.
+- Inference: synchronous REST -> async queue workers + model serving layer.
+- Experimentation: local artifacts -> tracked registry lifecycle.
+- Scaling: vertical scaling -> horizontal autoscaling on Kubernetes.
+
 See:
 
 - `docs/DEVELOPER_ONBOARDING_AND_TECHNICAL_HANDOVER.md`
 - `docs/slo_latency_tiers.md`
+
+Detailed execution roadmap: `docs/DEVELOPER_ONBOARDING_AND_TECHNICAL_HANDOVER.md` section "10) Target Future Development Plan (Gap Closure Roadmap)".
 
 ## 11) Contribution Workflow
 
