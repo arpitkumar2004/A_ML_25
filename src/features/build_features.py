@@ -105,6 +105,7 @@ class FeatureBuilder:
         }
 
         # cache
-        IO.save_pickle({"X": X, "meta": meta}, self.output_cache)
-        logger.info(f"Saved combined feature matrix to {self.output_cache}")
+        if self.output_cache:
+            IO.save_pickle({"X": X, "meta": meta}, self.output_cache)
+            logger.info(f"Saved combined feature matrix to {self.output_cache}")
         return X, meta

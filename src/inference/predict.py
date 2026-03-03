@@ -1,8 +1,10 @@
 # src/inference/predict.py
 import os
+import re
 from typing import Optional, Any, Dict
 import numpy as np
 import pandas as pd
+from scipy import sparse
 
 from ..utils.io import IO
 from ..utils.logging_utils import LoggerFactory
@@ -61,18 +63,24 @@ class PredictPipeline:
 
     def _discover_base_models(self):
         # Discover saved fold models in models_dir and build a mapping name -> list(paths)
-        model_files = [
-            f for f in os.listdir(self.models_dir)
-            if (f.endswith(".joblib") or f.endswith(".pkl")) and f.startswith("fold_")
-        ]
-        # We expect filenames like 'fold_{i}_LGBModel.joblib' created by Trainer earlier
+        model_files = [f for f in os.listdir(self.models_dir) if f.endswith(".joblib") or f.endswith(".pkl")]
+        # Supported formats:
+        #  1) fold_{i}_{ModelName}.joblib
+        #  2) {ModelName}_fold{i}.pkl
         models_by_type = {}
         for f in model_files:
             p = os.path.join(self.models_dir, f)
-            # attempt to parse model type from filename last segment
-            parts = f.split("_")
-            # fallback: take last token before extension
-            model_type = parts[-1].split(".")[0]
+
+            match_style_a = re.match(r"^fold_\d+_(?P<name>.+)\.(joblib|pkl)$", f)
+            match_style_b = re.match(r"^(?P<name>.+)_fold\d+\.(joblib|pkl)$", f)
+
+            if match_style_a:
+                model_type = match_style_a.group("name")
+            elif match_style_b:
+                model_type = match_style_b.group("name")
+            else:
+                continue
+
             models_by_type.setdefault(model_type, []).append(p)
         logger.info(f"Found base model artifacts: { {k: len(v) for k,v in models_by_type.items()} }")
         self._base_models = models_by_type
@@ -106,7 +114,8 @@ class PredictPipeline:
             for p in paths:
                 try:
                     m = IO.load_pickle(p)
-                    preds_per_fold.append(m.predict(X))
+                    X_model = self._align_features_for_model(X, m)
+                    preds_per_fold.append(m.predict(X_model))
                 except Exception as e:
                     logger.warning(f"Loading/predicting with model {p} failed: {e}")
             if preds_per_fold:
@@ -116,6 +125,39 @@ class PredictPipeline:
             raise RuntimeError("No base model predictions available.")
         df_preds = pd.DataFrame(preds)
         return df_preds
+
+    def _align_features_for_model(self, X, model):
+        """Best-effort feature-width alignment for legacy serialized models.
+
+        Some old artifacts were trained with a fixed feature width and fail when
+        current runtime features differ. For operational serving checks, we align
+        by truncating or zero-padding columns to the model's expected width.
+        """
+        expected = getattr(model, "n_features_", None)
+        if expected is None and hasattr(model, "model"):
+            expected = getattr(model.model, "n_features_", None)
+
+        if expected is None:
+            return X
+
+        current = X.shape[1]
+        if current == expected:
+            return X
+
+        logger.warning(f"Aligning feature width for legacy model: current={current}, expected={expected}")
+
+        if sparse.issparse(X):
+            X_csr = X.tocsr()
+            if current > expected:
+                return X_csr[:, :expected]
+            pad = sparse.csr_matrix((X_csr.shape[0], expected - current), dtype=X_csr.dtype)
+            return sparse.hstack([X_csr, pad], format="csr")
+
+        X_np = np.asarray(X)
+        if current > expected:
+            return X_np[:, :expected]
+        pad = np.zeros((X_np.shape[0], expected - current), dtype=X_np.dtype)
+        return np.hstack([X_np, pad])
 
     def predict(self, df: pd.DataFrame, text_col: str = "Description", image_col: str = "image_path", force_rebuild_features: bool = False):
         """
