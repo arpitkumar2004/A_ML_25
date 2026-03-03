@@ -39,7 +39,18 @@ experiments/                   # Artifacts: models, oof, logs, reports, submissi
 
 ## 3) Core Architecture
 
+### System architecture (image)
+
+#### High level
+![System Architecture](docs/system_archit.png)
+
+#### Detailed Info Structure
+![System Architecture](docs/System_architecture.png)
+
+
 ### System structure (block diagram)
+
+Detailed flow (Mermaid):
 
 ```mermaid
 flowchart LR
