@@ -17,6 +17,7 @@ from ..models.linear_model import LinearModel
 from ..models.rf_model import RandomForestModel
 from ..models.stacker import Stacker
 from ..utils.run_registry import make_run_id, write_run_manifest
+from ..registry.model_registry import register_run
 
 # Because this is giving error at this time
 try:
@@ -187,6 +188,13 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
         outputs=manifest_outputs,
         timings=timings,
         registry_dir=cfg.get("registry_dir", "experiments/registry"),
+    )
+    register_run(
+        run_id=run_id,
+        manifest_path=manifest_path,
+        stage="train",
+        registry_dir=cfg.get("registry_dir", "experiments/registry"),
+        status="staging",
     )
 
     summary = {

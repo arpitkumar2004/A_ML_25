@@ -1,15 +1,14 @@
 {
-  "run_id": "smoke_infer",
-  "stage": "inference",
-  "created_utc": "2026-03-08T01:21:18.205382+00:00",
+  "run_id": "train_20260308T012116Z",
+  "stage": "train",
+  "created_utc": "2026-03-08T01:21:18.077430+00:00",
   "config": {
-    "run_id": "smoke_infer",
-    "input_path": "experiments/smoke_check/data/infer_input.csv",
-    "output_path": "experiments/smoke_check/submissions/infer_output.csv",
+    "data_path": "experiments/smoke_check/data/train_smoke.csv",
+    "sample_frac": 0.01,
+    "random_state": 42,
     "text_col": "Description",
     "image_col": "__missing_image_col__",
-    "id_col": "unique_identifier",
-    "pred_col": "predicted_price",
+    "target_col": "Price",
     "text_cfg": {
       "method": "tfidf",
       "cache_path": "experiments/smoke_check/data/text_embeddings.joblib",
@@ -35,27 +34,35 @@
       "random_state": 42
     },
     "feature_cache": "experiments/smoke_check/data/features.joblib",
+    "force_rebuild": true,
+    "dim_method": "pca",
+    "dim_components": 16,
     "dim_cache": "experiments/smoke_check/data/dimred.joblib",
-    "models_dir": "experiments/smoke_check/models",
-    "oof_meta_path": "experiments/smoke_check/oof/model_names.joblib",
-    "stacker_path": "experiments/smoke_check/models/stacker.joblib",
+    "use_dim_cache": true,
+    "models_out": "experiments/smoke_check/models",
+    "oof_out": "experiments/smoke_check/oof",
+    "reports_dir": "experiments/smoke_check/reports",
+    "report_out": "experiments/smoke_check/reports/model_comparison.joblib",
+    "report_csv": "experiments/smoke_check/reports/model_comparison.csv",
     "registry_dir": "experiments/smoke_check/registry",
-    "latency_log_path": "experiments/smoke_check/monitoring/latency_events.jsonl"
+    "run_stacker": false,
+    "n_splits": 2,
+    "stratify": false
   },
   "outputs": {
-    "output_path": "experiments/smoke_check/submissions/infer_output.csv",
-    "models_dir": "experiments/smoke_check/models",
-    "feature_cache": "experiments/smoke_check/data/features.joblib",
+    "model_report": "experiments/smoke_check/reports/model_comparison.csv",
+    "oof_path": "experiments/smoke_check/oof\\oof_matrix.joblib",
     "dim_cache": "experiments/smoke_check/data/dimred.joblib",
+    "feature_cache": "experiments/smoke_check/data/features.joblib",
     "selector_path": "experiments/smoke_check/data/feature_selector.joblib",
-    "latency_log_path": "experiments/smoke_check/monitoring/latency_events.jsonl",
-    "rows": 12
+    "numeric_scaler_path": "experiments/smoke_check/data/numeric_scaler.joblib"
   },
   "timings_seconds": {
-    "load_input": 0.0031,
-    "pipeline_init": 0.0,
-    "predict": 0.0225,
-    "postprocess_and_save": 0.0026,
-    "total": 0.0283
+    "load_data": 0.7354,
+    "parse_features": 0.3199,
+    "build_features": 0.5635,
+    "dimensionality": 0.0039,
+    "train_and_eval": 0.0429,
+    "total": 1.6672
   }
 }

@@ -1,15 +1,29 @@
 import os
 import re
+import time
+import random
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+import numpy as np
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from ..inference.predict import PredictPipeline
 from ..inference.postprocess import Postprocessor
+from ..utils.logging_utils import LoggerFactory
+
+logger = LoggerFactory.get("serving_app")
+
+_SERVICE_METRICS = {
+    "request_count": 0,
+    "error_count": 0,
+    "predict_count": 0,
+    "latencies_ms": [],
+}
 
 
 def _load_env_file() -> None:
@@ -55,10 +69,13 @@ class ModelService:
         self.ready: bool = False
         self.ready_reason: str = "initializing"
         self.pipeline: Optional[PredictPipeline] = None
+        self.canary_pipeline: Optional[PredictPipeline] = None
+        self.canary_enabled: bool = False
+        self.canary_percent: float = 0.0
+        self.compare_canary: bool = False
 
-    def initialize(self):
-        models_dir = os.getenv("MODELS_DIR", "experiments/models")
-
+    @staticmethod
+    def _build_pipeline(models_dir: str) -> PredictPipeline:
         text_method = os.getenv("TEXT_METHOD", "tfidf").lower()
         text_cfg = {
             "method": text_method,
@@ -70,9 +87,9 @@ class ModelService:
             "cache_path": None,
             "model_name": os.getenv("CLIP_MODEL_NAME", "openai/clip-vit-base-patch32"),
             "batch_size": int(os.getenv("IMAGE_BATCH_SIZE", "16")),
+            "lazy_init": True,
         }
-
-        self.pipeline = PredictPipeline(
+        return PredictPipeline(
             text_cfg=text_cfg,
             image_cfg=image_cfg,
             numeric_cfg=None,
@@ -83,24 +100,48 @@ class ModelService:
             stacker_path=os.getenv("STACKER_PATH", "experiments/models/stacker.joblib"),
         )
 
+    @staticmethod
+    def _has_fold_models(models_dir: str) -> bool:
         if not os.path.isdir(models_dir):
-            self.ready = False
-            self.ready_reason = f"models_dir_not_found:{models_dir}"
-            return
-
+            return False
         model_files = [
             f
             for f in os.listdir(models_dir)
             if (f.endswith(".joblib") or f.endswith(".pkl"))
             and (f.startswith("fold_") or re.search(r"_fold\d+", f) is not None)
         ]
-        if not model_files:
+        return bool(model_files)
+
+    def initialize(self):
+        models_dir = os.getenv("MODELS_DIR", "experiments/models")
+
+        if not self._has_fold_models(models_dir):
             self.ready = False
             self.ready_reason = f"no_fold_model_artifacts_in:{models_dir}"
             return
 
+        self.pipeline = self._build_pipeline(models_dir)
+
+        canary_dir = os.getenv("CANARY_MODELS_DIR", "").strip()
+        self.canary_percent = float(os.getenv("CANARY_PERCENT", "0"))
+        self.compare_canary = os.getenv("CANARY_COMPARE", "false").strip().lower() == "true"
+        self.canary_enabled = bool(canary_dir) and self.canary_percent > 0 and self._has_fold_models(canary_dir)
+        if self.canary_enabled:
+            self.canary_pipeline = self._build_pipeline(canary_dir)
+            logger.info("Canary enabled: dir=%s percent=%s", canary_dir, self.canary_percent)
+        else:
+            self.canary_pipeline = None
+
         self.ready = True
         self.ready_reason = "ok"
+
+    def choose_pipeline(self) -> (PredictPipeline, str):
+        if self.pipeline is None:
+            raise RuntimeError("pipeline_not_initialized")
+        if self.canary_enabled and self.canary_pipeline is not None:
+            if random.random() * 100.0 < self.canary_percent:
+                return self.canary_pipeline, "canary"
+        return self.pipeline, "primary"
 
     def warmup(self):
         if self.pipeline is None:
@@ -111,6 +152,41 @@ class ModelService:
 
 service = ModelService()
 app = FastAPI(title="A_ML_25 Inference Service", version="1.0.0")
+
+
+@app.middleware("http")
+async def request_middleware(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+    start = time.perf_counter()
+    _SERVICE_METRICS["request_count"] += 1
+
+    api_key = os.getenv("API_KEY", "").strip()
+    if api_key and request.url.path.startswith("/v1/"):
+        provided = request.headers.get("x-api-key", "")
+        if provided != api_key:
+            _SERVICE_METRICS["error_count"] += 1
+            return JSONResponse(
+                status_code=401,
+                content={"error": "unauthorized", "message": "Invalid API key", "request_id": request_id},
+            )
+
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        _SERVICE_METRICS["error_count"] += 1
+        logger.exception("request_failed request_id=%s path=%s err=%s", request_id, request.url.path, exc)
+        return JSONResponse(
+            status_code=500,
+            content={"error": "internal_error", "message": str(exc), "request_id": request_id},
+        )
+
+    elapsed_ms = (time.perf_counter() - start) * 1000.0
+    _SERVICE_METRICS["latencies_ms"].append(float(elapsed_ms))
+    if len(_SERVICE_METRICS["latencies_ms"]) > 5000:
+        _SERVICE_METRICS["latencies_ms"] = _SERVICE_METRICS["latencies_ms"][-5000:]
+
+    response.headers["x-request-id"] = request_id
+    return response
 
 
 @app.on_event("startup")
@@ -270,6 +346,25 @@ def healthz():
     return {"status": "ok"}
 
 
+@app.get("/metrics")
+def metrics():
+    lat = np.asarray(_SERVICE_METRICS["latencies_ms"], dtype=float)
+    p50 = float(np.percentile(lat, 50)) if lat.size else 0.0
+    p95 = float(np.percentile(lat, 95)) if lat.size else 0.0
+    p99 = float(np.percentile(lat, 99)) if lat.size else 0.0
+    return {
+        "request_count": int(_SERVICE_METRICS["request_count"]),
+        "error_count": int(_SERVICE_METRICS["error_count"]),
+        "predict_count": int(_SERVICE_METRICS["predict_count"]),
+        "latency_ms": {"p50": p50, "p95": p95, "p99": p99},
+        "canary": {
+            "enabled": bool(service.canary_enabled),
+            "percent": float(service.canary_percent),
+            "compare": bool(service.compare_canary),
+        },
+    }
+
+
 @app.get("/readyz")
 def readyz():
     if service.ready:
@@ -294,13 +389,34 @@ def predict(req: PredictRequest):
         raise HTTPException(status_code=503, detail={"ready": False, "reason": service.ready_reason})
 
     try:
+        max_records = int(os.getenv("MAX_PREDICT_RECORDS", "200"))
+        if len(req.records) > max_records:
+            raise HTTPException(status_code=413, detail=f"too_many_records:{len(req.records)}>{max_records}")
+
         df = pd.DataFrame(req.records)
-        preds = service.pipeline.predict(
+        primary_pipeline, variant = service.choose_pipeline()
+        preds = primary_pipeline.predict(
             df,
             text_col=req.text_col,
             image_col=req.image_col,
             force_rebuild_features=True,
         )
+        _SERVICE_METRICS["predict_count"] += 1
+
+        divergence = None
+        if service.compare_canary and service.canary_pipeline is not None and variant == "primary":
+            try:
+                canary_preds = service.canary_pipeline.predict(
+                    df,
+                    text_col=req.text_col,
+                    image_col=req.image_col,
+                    force_rebuild_features=True,
+                )
+                divergence = float(np.mean(np.abs(np.asarray(preds) - np.asarray(canary_preds))))
+                logger.info("canary_compare divergence_mae=%s rows=%s", divergence, len(df))
+            except Exception as canary_exc:
+                logger.warning("canary_compare_failed err=%s", canary_exc)
+
         if req.target_transform == "log1p":
             preds = Postprocessor.invert_log1p(preds)
         preds = Postprocessor.clip_min(preds, req.min_value)
@@ -309,7 +425,10 @@ def predict(req: PredictRequest):
 
         if req.id_col in df.columns:
             out_df = Postprocessor.to_submission_df(df[req.id_col].values, preds, id_col=req.id_col, pred_col=req.pred_col)
-            return {"predictions": out_df.to_dict(orient="records")}
-        return {"predictions": preds.tolist()}
+            return {"predictions": out_df.to_dict(orient="records"), "model_variant": variant, "canary_divergence_mae": divergence}
+        return {"predictions": preds.tolist(), "model_variant": variant, "canary_divergence_mae": divergence}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"prediction_failed:{exc}")
+        _SERVICE_METRICS["error_count"] += 1
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail={"error": "prediction_failed", "message": str(exc)})

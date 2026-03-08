@@ -15,6 +15,10 @@ pipeline:
 			steps:
 				- python -m compileall src main.py
 
+		- name: config_validation
+			steps:
+				- python scripts/validate_configs.py
+
 		- name: unit_tests
 			steps:
 				- pytest -q ci_cd/tests
@@ -22,4 +26,10 @@ pipeline:
 		- name: smoke
 			steps:
 				- python main.py --help
+				- python scripts/smoke_train_predict.py
+
+		- name: monitoring_gate
+			steps:
+				- python scripts/build_monitoring_dashboard.py --config configs/monitoring/alerts.yaml
+				- python scripts/check_monitoring_alerts.py --dashboard experiments/monitoring/dashboard.json
 

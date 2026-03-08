@@ -8,6 +8,7 @@ from ..inference.postprocess import Postprocessor
 from ..utils.logging_utils import LoggerFactory
 from ..utils.io import IO
 from ..utils.run_registry import make_run_id, write_run_manifest, append_jsonl
+from ..registry.model_registry import register_run
 
 logger = LoggerFactory.get("inference_pipeline")
 
@@ -93,6 +94,13 @@ def run_inference_pipeline(cfg: Dict[str, Any]) -> str:
         outputs=manifest_outputs,
         timings=timings,
         registry_dir=cfg.get("registry_dir", "experiments/registry"),
+    )
+    register_run(
+        run_id=run_id,
+        manifest_path=manifest_path,
+        stage="inference",
+        registry_dir=cfg.get("registry_dir", "experiments/registry"),
+        status="recorded",
     )
 
     logger.info(f"Saved predictions to {out_path}")
