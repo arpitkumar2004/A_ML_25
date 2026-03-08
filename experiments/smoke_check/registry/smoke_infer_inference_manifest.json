@@ -1,0 +1,61 @@
+{
+  "run_id": "smoke_infer",
+  "stage": "inference",
+  "created_utc": "2026-03-08T00:50:12.606222+00:00",
+  "config": {
+    "run_id": "smoke_infer",
+    "input_path": "experiments/smoke_check/data/infer_input.csv",
+    "output_path": "experiments/smoke_check/submissions/infer_output.csv",
+    "text_col": "Description",
+    "image_col": "__missing_image_col__",
+    "id_col": "unique_identifier",
+    "pred_col": "predicted_price",
+    "text_cfg": {
+      "method": "tfidf",
+      "cache_path": "experiments/smoke_check/data/text_embeddings.joblib",
+      "vectorizer_path": "experiments/smoke_check/data/tfidf_vectorizer.joblib",
+      "tfidf_max_features": 512,
+      "tfidf_ngram_range": [
+        1,
+        2
+      ]
+    },
+    "image_cfg": {
+      "cache_path": "experiments/smoke_check/data/image_embeddings.joblib"
+    },
+    "numeric_cfg": {
+      "scaler_path": "experiments/smoke_check/data/numeric_scaler.joblib"
+    },
+    "selector_cfg": {
+      "enabled": true,
+      "method": "f_regression",
+      "k": 128,
+      "min_features": 16,
+      "save_path": "experiments/smoke_check/data/feature_selector.joblib",
+      "random_state": 42
+    },
+    "feature_cache": "experiments/smoke_check/data/features.joblib",
+    "dim_cache": "experiments/smoke_check/data/dimred.joblib",
+    "models_dir": "experiments/smoke_check/models",
+    "oof_meta_path": "experiments/smoke_check/oof/model_names.joblib",
+    "stacker_path": "experiments/smoke_check/models/stacker.joblib",
+    "registry_dir": "experiments/smoke_check/registry",
+    "latency_log_path": "experiments/smoke_check/monitoring/latency_events.jsonl"
+  },
+  "outputs": {
+    "output_path": "experiments/smoke_check/submissions/infer_output.csv",
+    "models_dir": "experiments/smoke_check/models",
+    "feature_cache": "experiments/smoke_check/data/features.joblib",
+    "dim_cache": "experiments/smoke_check/data/dimred.joblib",
+    "selector_path": "experiments/smoke_check/data/feature_selector.joblib",
+    "latency_log_path": "experiments/smoke_check/monitoring/latency_events.jsonl",
+    "rows": 12
+  },
+  "timings_seconds": {
+    "load_input": 0.0222,
+    "pipeline_init": 0.0,
+    "predict": 0.0368,
+    "postprocess_and_save": 0.0022,
+    "total": 0.0612
+  }
+}

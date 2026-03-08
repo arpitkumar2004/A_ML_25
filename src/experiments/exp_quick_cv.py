@@ -17,9 +17,8 @@ fb = FeatureBuilder(
     numeric_cfg={"scaler_path":"data/processed/numeric_scaler.joblib"},
     output_cache="data/processed/features.joblib"
 )
-X, meta = fb.build(df, text_col="Description", image_col="image_path", force_rebuild=False)
-
 y = df["Price"].values
+X, meta = fb.build(df, text_col="Description", image_col="image_path", force_rebuild=False, y=y, mode="train")
 
 trainer = Trainer(output_dir="experiments/models", n_splits=2, random_state=42, stratify=False)
 models, oof, metrics = trainer.run_cv(LGBModel, model_params={"params": {"n_estimators":100, "learning_rate":0.1}}, X=X, y=y)

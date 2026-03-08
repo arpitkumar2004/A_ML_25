@@ -1,0 +1,37 @@
+{
+  "drift_top": [
+    {
+      "feature": "unique_identifier",
+      "psi": 0.0,
+      "ref_mean": 149841.91770666666,
+      "cur_mean": 149841.91770666666,
+      "ref_std": 86584.76927534667,
+      "cur_std": 86584.76927534667,
+      "missing_ref": 0.0,
+      "missing_cur": 0.0
+    },
+    {
+      "feature": "Price",
+      "psi": 0.0,
+      "ref_mean": 23.647654,
+      "cur_mean": 23.647654,
+      "ref_std": 33.376709669532794,
+      "cur_std": 33.376709669532794,
+      "missing_ref": 0.0,
+      "missing_cur": 0.0
+    }
+  ],
+  "latency_summary": {
+    "runs": 0,
+    "p50_total_seconds": 0.0,
+    "p95_total_seconds": 0.0,
+    "p99_total_seconds": 0.0,
+    "p95_seconds_per_row": 0.0
+  },
+  "alerts": [],
+  "counts": {
+    "reference_rows": 75000,
+    "current_rows": 75000,
+    "latency_events": 0
+  }
+}

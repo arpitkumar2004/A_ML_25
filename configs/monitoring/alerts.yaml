@@ -1,0 +1,11 @@
+monitoring:
+  reference_path: "experiments/smoke_check/data/train_smoke.csv"
+  current_path: "experiments/smoke_check/data/train_smoke.csv"
+  latency_log_path: "experiments/monitoring/latency_events.jsonl"
+  out_json_path: "experiments/monitoring/dashboard.json"
+  out_html_path: "experiments/monitoring/dashboard.html"
+  rules:
+    psi_warn: 0.2
+    psi_critical: 0.3
+    latency_p95_total_seconds: 5.0
+    latency_p95_seconds_per_row: 0.05

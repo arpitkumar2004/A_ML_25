@@ -15,6 +15,7 @@ import numpy as np
 import joblib
 from ..utils.io import IO
 from ..utils.logging_utils import LoggerFactory
+from ..utils.fingerprint import stable_hash
 from ..data.text_cleaning import TextCleaner
 warnings.filterwarnings("ignore")
 
@@ -39,27 +40,49 @@ class TextEmbedder:
                  method: str = "sbert",
                  model_name: str = "all-MiniLM-L6-v2",
                  cache_path: Optional[str] = "data/processed/text_embeddings.joblib",
+                 vectorizer_path: Optional[str] = "data/processed/tfidf_vectorizer.joblib",
                  tfidf_max_features: int = 5000,
                  tfidf_ngram_range: Tuple[int,int] = (1,2)):
         self.method = method.lower()
         self.model_name = model_name
         self.cache_path = cache_path
+        self.vectorizer_path = vectorizer_path
         self.tfidf_max_features = tfidf_max_features
         self.tfidf_ngram_range = tfidf_ngram_range
         self._model = None
         self._vectorizer = None
 
-    def _load_cache(self):
+    def _load_cache(self, fingerprint: Optional[str] = None):
         if self.cache_path and os.path.exists(self.cache_path):
             logger.info(f"Loading cached text features from {self.cache_path}")
-            return joblib.load(self.cache_path)
+            payload = joblib.load(self.cache_path)
+            if isinstance(payload, dict) and "data" in payload and "fingerprint" in payload:
+                if fingerprint is not None and payload.get("fingerprint") != fingerprint:
+                    return None
+                return payload.get("data")
+            if fingerprint is not None:
+                # Old cache format had no fingerprint, so avoid stale reuse.
+                return None
+            return payload
         return None
 
-    def _save_cache(self, obj):
+    def _save_cache(self, obj, fingerprint: Optional[str] = None):
         if not self.cache_path:
             return
-        IO.save_pickle(obj, self.cache_path)
+        IO.save_pickle({"fingerprint": fingerprint, "data": obj}, self.cache_path)
         logger.info(f"Saved text features to {self.cache_path}")
+
+    def _save_vectorizer(self):
+        if self.method != "tfidf" or self._vectorizer is None or not self.vectorizer_path:
+            return
+        IO.save_pickle(self._vectorizer, self.vectorizer_path)
+
+    def _load_vectorizer(self):
+        if self._vectorizer is not None or not self.vectorizer_path:
+            return
+        if os.path.exists(self.vectorizer_path):
+            self._vectorizer = IO.load_pickle(self.vectorizer_path)
+            logger.info(f"Loaded TF-IDF vectorizer from {self.vectorizer_path}")
 
     def _init_sbert(self):
         if SentenceTransformer is None:
@@ -76,13 +99,27 @@ class TextEmbedder:
             self._vectorizer.fit(sample_texts)
             logger.info("Fitted TF-IDF vectorizer")
 
-    def fit_transform(self, texts: Iterable[str], use_cache: bool = True):
+    def _fingerprint(self, texts: Iterable[str], mode: str) -> str:
+        sample = [str(t) for t in texts]
+        payload = {
+            "mode": mode,
+            "method": self.method,
+            "model_name": self.model_name,
+            "tfidf_max_features": self.tfidf_max_features,
+            "tfidf_ngram_range": list(self.tfidf_ngram_range),
+            "n": len(sample),
+            "texts_hash": stable_hash(sample),
+        }
+        return stable_hash(payload)
+
+    def fit_transform(self, texts: Iterable[str], use_cache: bool = True, fingerprint: Optional[str] = None):
         """
         Fit (if needed) and transform texts into embeddings or tfidf matrix.
         Returns dense np.ndarray (for sbert) or scipy csr_matrix (for tfidf).
         """
         texts = [TextCleaner.basic(t) for t in texts]
-        cached = self._load_cache() if use_cache else None
+        fp = fingerprint or self._fingerprint(texts, mode="fit_transform")
+        cached = self._load_cache(fp) if use_cache else None
         if cached is not None:
             return cached
 
@@ -91,27 +128,38 @@ class TextEmbedder:
             with logger.handlers and logger:  # ensure logger exists; no-op context
                 pass
             emb = self._model.encode(texts, show_progress_bar=False, convert_to_numpy=True, batch_size=64)
-            self._save_cache(emb)
+            self._save_cache(emb, fp)
             return emb
         elif self.method == "tfidf":
             self._init_tfidf(texts)
             X = self._vectorizer.transform(texts)
-            self._save_cache(X)
+            self._save_vectorizer()
+            self._save_cache(X, fp)
             return X
         else:
             raise ValueError(f"Unknown text embedding method: {self.method}")
 
-    def transform(self, texts: Iterable[str]):
+    def transform(self, texts: Iterable[str], use_cache: bool = True, fingerprint: Optional[str] = None):
         # Pure transform assuming model/vectorizer already initialized
         texts = [TextCleaner.basic(t) for t in texts]
+        fp = fingerprint or self._fingerprint(texts, mode="transform")
+        cached = self._load_cache(fp) if use_cache else None
+        if cached is not None:
+            return cached
+
         if self.method == "sbert":
             if self._model is None:
                 self._init_sbert()
-            return self._model.encode(texts, show_progress_bar=False, convert_to_numpy=True, batch_size=64)
+            out = self._model.encode(texts, show_progress_bar=False, convert_to_numpy=True, batch_size=64)
+            self._save_cache(out, fp)
+            return out
         else:
+            self._load_vectorizer()
             if self._vectorizer is None:
-                raise RuntimeError("TF-IDF vectorizer not fitted. Call fit_transform first.")
-            return self._vectorizer.transform(texts)
+                raise RuntimeError("TF-IDF vectorizer not fitted. Call fit_transform in training first.")
+            out = self._vectorizer.transform(texts)
+            self._save_cache(out, fp)
+            return out
 
 
 # Seperater line

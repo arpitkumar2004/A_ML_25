@@ -1,6 +1,6 @@
 """Feature parsing helpers (counts, weights)."""
 # src/data/parse_features.py
-from typing import Optional
+from typing import Optional, Dict, List, Tuple
 import re
 import pandas as pd
 import numpy as np
@@ -11,6 +11,100 @@ class Parser:
     Extract structured pieces from description text: value and unit parsing,
     counts of items, ounces, weights, etc.
     """
+
+    UNIT_RULES = {
+        # weight -> grams
+        "mg": ("weight_g", 0.001),
+        "milligram": ("weight_g", 0.001),
+        "milligrams": ("weight_g", 0.001),
+        "g": ("weight_g", 1.0),
+        "gram": ("weight_g", 1.0),
+        "grams": ("weight_g", 1.0),
+        "kg": ("weight_g", 1000.0),
+        "kilogram": ("weight_g", 1000.0),
+        "kilograms": ("weight_g", 1000.0),
+        "oz": ("weight_g", 28.349523125),
+        "ounce": ("weight_g", 28.349523125),
+        "ounces": ("weight_g", 28.349523125),
+        "lb": ("weight_g", 453.59237),
+        "lbs": ("weight_g", 453.59237),
+        "pound": ("weight_g", 453.59237),
+        "pounds": ("weight_g", 453.59237),
+        # volume -> milliliters
+        "ml": ("volume_ml", 1.0),
+        "milliliter": ("volume_ml", 1.0),
+        "milliliters": ("volume_ml", 1.0),
+        "l": ("volume_ml", 1000.0),
+        "liter": ("volume_ml", 1000.0),
+        "liters": ("volume_ml", 1000.0),
+        "fl oz": ("volume_ml", 29.5735295625),
+        "floz": ("volume_ml", 29.5735295625),
+        # count-like
+        "ct": ("count_units", 1.0),
+        "count": ("count_units", 1.0),
+        "pcs": ("count_units", 1.0),
+        "pc": ("count_units", 1.0),
+        "piece": ("count_units", 1.0),
+        "pieces": ("count_units", 1.0),
+        "pack": ("count_units", 1.0),
+        "packs": ("count_units", 1.0),
+        "serving": ("count_units", 1.0),
+        "servings": ("count_units", 1.0),
+        "bar": ("count_units", 1.0),
+        "bars": ("count_units", 1.0),
+    }
+
+    QUANTITY_PATTERN = re.compile(
+        r"(\d+(?:\.\d+)?)\s*(fl\s*oz|floz|mg|g|kg|oz|ounce|ounces|lb|lbs|pound|pounds|ml|l|liter|liters|milliliter|milliliters|ct|count|pcs|pc|piece|pieces|pack|packs|serving|servings|bar|bars)\b",
+        flags=re.I,
+    )
+    UNIT_FIRST_PATTERN = re.compile(
+        r"(pack|packs|ct|count|pcs|pc|piece|pieces|serving|servings|bar|bars)\s*(?:of\s*)?(\d+(?:\.\d+)?)\b",
+        flags=re.I,
+    )
+
+    @staticmethod
+    def _extract_quantities(text: Optional[str]) -> List[Tuple[float, str]]:
+        if not text:
+            return []
+        matches = Parser.QUANTITY_PATTERN.findall(text)
+        quantities = []
+        for value, unit in matches:
+            try:
+                quantities.append((float(value), unit.lower().replace(" ", "")))
+            except Exception:
+                continue
+        unit_first_matches = Parser.UNIT_FIRST_PATTERN.findall(text)
+        for unit, value in unit_first_matches:
+            try:
+                quantities.append((float(value), unit.lower().replace(" ", "")))
+            except Exception:
+                continue
+        return quantities
+
+    @staticmethod
+    def _normalized_quantity_stats(text: Optional[str]) -> Dict[str, float]:
+        stats = {
+            "total_weight_g": 0.0,
+            "total_volume_ml": 0.0,
+            "total_count_units": 0.0,
+            "quantity_mentions": 0.0,
+            "has_quantity": 0.0,
+        }
+        quantities = Parser._extract_quantities(text)
+        if not quantities:
+            return stats
+
+        stats["quantity_mentions"] = float(len(quantities))
+        stats["has_quantity"] = 1.0
+        for value, unit in quantities:
+            mapped = Parser.UNIT_RULES.get(unit)
+            if mapped is None:
+                continue
+            bucket, scale = mapped
+            stats[f"total_{bucket}"] = stats.get(f"total_{bucket}", 0.0) + (value * scale)
+
+        return stats
 
     @staticmethod
     def parse_ounces(text: Optional[str]) -> float:
@@ -47,8 +141,23 @@ class Parser:
         vals_units = df[text_col].fillna("").astype(str).apply(Parser.parse_value_unit)
         df["parsed_value"] = vals_units.apply(lambda x: x[0]).astype(float)
         df["parsed_unit"] = vals_units.apply(lambda x: x[1]).astype(str)
+        quantity_stats = df[text_col].fillna("").astype(str).apply(Parser._normalized_quantity_stats).apply(pd.Series)
+        quantity_stats = quantity_stats.rename(
+            columns={
+                "total_weight_g": "parsed_total_weight_g",
+                "total_volume_ml": "parsed_total_volume_ml",
+                "total_count_units": "parsed_total_count_units",
+                "quantity_mentions": "parsed_quantity_mentions",
+                "has_quantity": "parsed_has_quantity",
+            }
+        )
+        df = pd.concat([df, quantity_stats], axis=1)
+
         # derived: value normalized (will convert units later)
         df["parsed_value_log1p"] = np.log1p(df["parsed_value"].fillna(0.0).astype(float))
+        df["parsed_weight_log1p"] = np.log1p(df["parsed_total_weight_g"].fillna(0.0).astype(float))
+        df["parsed_volume_log1p"] = np.log1p(df["parsed_total_volume_ml"].fillna(0.0).astype(float))
+        df["parsed_count_log1p"] = np.log1p(df["parsed_total_count_units"].fillna(0.0).astype(float))
         return df
 
 

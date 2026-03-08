@@ -29,6 +29,7 @@ class PredictPipeline:
                  text_cfg: Dict = None,
                  image_cfg: Dict = None,
                  numeric_cfg: Dict = None,
+                 selector_cfg: Dict = None,
                  feature_cache: str = "data/processed/features.joblib",
                  dim_cache: str = "data/processed/dimred.joblib",
                  models_dir: str = "experiments/models",
@@ -37,6 +38,7 @@ class PredictPipeline:
         self.text_cfg = text_cfg or {"method": "sbert", "cache_path":"data/processed/text_embeddings.joblib"}
         self.image_cfg = image_cfg or {"cache_path":"data/processed/image_embeddings.joblib"}
         self.numeric_cfg = numeric_cfg or {"scaler_path":"data/processed/numeric_scaler.joblib"}
+        self.selector_cfg = selector_cfg or {}
         self.feature_cache = feature_cache
         self.dim_cache = dim_cache
         self.models_dir = models_dir
@@ -44,7 +46,13 @@ class PredictPipeline:
         self.stacker_path = stacker_path
 
         # lazy attributes
-        self._feature_builder = FeatureBuilder(self.text_cfg, self.image_cfg, self.numeric_cfg, output_cache=self.feature_cache)
+        self._feature_builder = FeatureBuilder(
+            self.text_cfg,
+            self.image_cfg,
+            self.numeric_cfg,
+            selector_cfg=self.selector_cfg,
+            output_cache=self.feature_cache,
+        )
         self._dim_reducer = None
         self._base_models = None
         self._model_names = None
@@ -171,7 +179,13 @@ class PredictPipeline:
             df = Parser.add_parsed_features(df, text_col=text_col)
 
         # Build features (reuses cached embeddings if available)
-        X_raw, meta = self._feature_builder.build(df, text_col=text_col, image_col=image_col, force_rebuild=force_rebuild_features)
+        X_raw, meta = self._feature_builder.build(
+            df,
+            text_col=text_col,
+            image_col=image_col,
+            force_rebuild=force_rebuild_features,
+            mode="inference",
+        )
 
         # convert sparse -> dense if reducer requires it
         X_dense = None

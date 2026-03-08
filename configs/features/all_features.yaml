@@ -4,3 +4,9 @@ all_features:
   combine_parsed: true
   combine_image_embeddings: true
   feature_cache: "data/processed/features.joblib"
+  selector_cfg:
+    enabled: true
+    method: "f_regression"
+    k: 2048
+    min_features: 128
+    save_path: "data/processed/feature_selector.joblib"

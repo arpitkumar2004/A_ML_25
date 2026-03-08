@@ -63,17 +63,21 @@ def run(config: Dict):
     df = Parser.add_parsed_features(df, text_col=config.get("text_col", "Description"))
     logger.info("Parsed textual numeric/unit features")
 
-    # 2) Build features (text + image + numeric)
+    # 2) Prepare target and build features (text + image + numeric)
+    y = df[config.get("target_col", "Price")].values.astype(float)
     feature_builder = FeatureBuilder(
         text_cfg=config.get("text_cfg", {"method":"sbert", "cache_path":"data/processed/text_embeddings.joblib"}),
         image_cfg=config.get("image_cfg", {"cache_path":"data/processed/image_embeddings.joblib"}),
         numeric_cfg=config.get("numeric_cfg", {"scaler_path":"data/processed/numeric_scaler.joblib"}),
+        selector_cfg=config.get("selector_cfg", {}),
         output_cache=config.get("feature_cache", "data/processed/features.joblib")
     )
     X_raw, meta = feature_builder.build(df,
                                        text_col=config.get("text_col", "Description"),
                                        image_col=config.get("image_col", "image_path"),
-                                       force_rebuild=config.get("force_rebuild_features", False))
+                                       force_rebuild=config.get("force_rebuild_features", False),
+                                       y=y,
+                                       mode="train")
     logger.info(f"Built raw feature matrix: shape={X_raw.shape if hasattr(X_raw,'shape') else 'sparse?'}; meta={meta}")
 
     # convert sparse to dense if needed for UMAP/PCA; keep copy of raw for tree models if you want
@@ -98,16 +102,15 @@ def run(config: Dict):
         dim_meta = {}
     else:
         try:
-            X_red, dim_meta = reducer.fit_transform(X_dense, use_cache=config.get("use_dim_cache", True))
+            X_red, dim_meta = reducer.fit_transform(X_dense, use_cache=config.get("use_dim_cache", True), fingerprint=meta.get("feature_fingerprint"))
             X_final = X_red
             logger.info(f"Dim reduction applied. X_final shape {X_final.shape}")
         except Exception as e:
             logger.warning(f"Dim reducer failed ({e}). Falling back to PCA on dense matrix.")
             reducer_pca = DimReducer(method="pca", n_components=min(50, X_dense.shape[1]), cache_path="data/processed/pca_fallback.joblib")
-            X_final, dim_meta = reducer_pca.fit_transform(X_dense, use_cache=False)
+            X_final, dim_meta = reducer_pca.fit_transform(X_dense, use_cache=False, fingerprint=meta.get("feature_fingerprint"))
 
-    # 4) Prepare target
-    y = df[config.get("target_col", "Price")].values.astype(float)
+    # 4) Target summary
     logger.info(f"Target loaded; n={len(y)}; stats: mean={y.mean():.3f} std={y.std():.3f}")
 
     # 5) Run CV across models

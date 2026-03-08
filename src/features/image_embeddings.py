@@ -5,19 +5,13 @@ import joblib
 
 from ..utils.io import IO
 from ..utils.logging_utils import LoggerFactory
+from ..utils.fingerprint import stable_hash
 
 logger = LoggerFactory.get("image_embeddings")
 
 
 class ImageEmbedder:
-    """
-    Extract image embeddings with best-effort behavior.
-
-    Behavior:
-    - Tries to load OpenAI CLIP or HF CLIP lazily.
-    - If the environment lacks a compatible vision stack, falls back to zero vectors.
-    - Caches embeddings to disk for repeatable inference speed.
-    """
+    """Extract image embeddings with fingerprinted cache reuse."""
 
     def __init__(
         self,
@@ -26,21 +20,27 @@ class ImageEmbedder:
         device: Optional[str] = None,
         batch_size: int = 32,
         fallback_dim: int = 512,
+        lazy_init: bool = True,
     ):
         self.model_name = model_name
         self.cache_path = cache_path
         self.batch_size = batch_size
         self.fallback_dim = fallback_dim
         self.device = device
+        self.lazy_init = lazy_init
 
         self._backend = None
         self._model = None
         self._processor = None
         self._preprocess = None
+        self._initialized = False
 
-        self._init_model_if_possible()
+        if not self.lazy_init:
+            self._init_model_if_possible()
 
     def _init_model_if_possible(self):
+        if self._initialized:
+            return
         try:
             import torch
 
@@ -56,6 +56,7 @@ class ImageEmbedder:
                 self._model = model
                 self._preprocess = preprocess
                 logger.info("Loaded OpenAI CLIP backend.")
+                self._initialized = True
                 return
             except Exception:
                 pass
@@ -70,6 +71,7 @@ class ImageEmbedder:
                 self._model = model
                 self._processor = processor
                 logger.info(f"Loaded HF CLIP backend: {self.model_name}")
+                self._initialized = True
                 return
             except Exception as exc:
                 logger.warning(f"HF CLIP unavailable, using zero-image fallback. reason={exc}")
@@ -80,18 +82,41 @@ class ImageEmbedder:
         self._backend = None
         self._model = None
         self._processor = None
+        self._initialized = True
 
-    def _load_cache(self):
+    def _ensure_initialized(self):
+        if not self._initialized:
+            self._init_model_if_possible()
+
+    def _load_cache(self, fingerprint: Optional[str] = None):
         if self.cache_path and os.path.exists(self.cache_path):
             logger.info(f"Loading cached image embeddings from {self.cache_path}")
-            return joblib.load(self.cache_path)
+            payload = joblib.load(self.cache_path)
+            if isinstance(payload, dict) and "data" in payload and "fingerprint" in payload:
+                if fingerprint is not None and payload.get("fingerprint") != fingerprint:
+                    return None
+                return payload.get("data")
+            if fingerprint is not None:
+                return None
+            return payload
         return None
 
-    def _save_cache(self, obj):
+    def _save_cache(self, obj, fingerprint: Optional[str] = None):
         if not self.cache_path:
             return
-        IO.save_pickle(obj, self.cache_path)
+        IO.save_pickle({"fingerprint": fingerprint, "data": obj}, self.cache_path)
         logger.info(f"Saved image embeddings to {self.cache_path}")
+
+    def _fingerprint(self, image_paths: Iterable[str], mode: str) -> str:
+        paths = [str(p) for p in image_paths]
+        payload = {
+            "mode": mode,
+            "model_name": self.model_name,
+            "n": len(paths),
+            "paths_hash": stable_hash(paths),
+            "backend": self._backend,
+        }
+        return stable_hash(payload)
 
     def _load_image(self, path_or_url: str):
         from PIL import Image
@@ -112,17 +137,18 @@ class ImageEmbedder:
 
         return Image.new("RGB", (224, 224), color=(255, 255, 255))
 
-    def embed(self, image_paths: Iterable[str], use_cache: bool = True):
-        cached = self._load_cache() if use_cache else None
+    def embed(self, image_paths: Iterable[str], use_cache: bool = True, fingerprint: Optional[str] = None):
+        paths = list(image_paths)
+        self._ensure_initialized()
+        fp = fingerprint or self._fingerprint(paths, mode="embed")
+        cached = self._load_cache(fp) if use_cache else None
         if cached is not None:
             return cached
 
-        paths = list(image_paths)
         n = len(paths)
-
         if self._backend is None or self._model is None:
             emb = np.zeros((n, self.fallback_dim), dtype=np.float32)
-            self._save_cache(emb)
+            self._save_cache(emb, fp)
             return emb
 
         import torch
@@ -155,5 +181,5 @@ class ImageEmbedder:
             outputs.append(y / norm)
 
         emb = np.vstack(outputs) if outputs else np.zeros((n, self.fallback_dim), dtype=np.float32)
-        self._save_cache(emb)
+        self._save_cache(emb, fp)
         return emb

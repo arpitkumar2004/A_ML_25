@@ -17,8 +17,20 @@ def run_feature_pipeline(cfg: Dict[str, Any]) -> Tuple[Any, Dict[str, Any]]:
     df = loader.sample(frac=cfg.get("sample_frac", 1.0), random_state=cfg.get("random_state", 42))
     df = Parser.add_parsed_features(df, text_col=cfg.get("text_col", "Description"))
 
-    fb = FeatureBuilder(cfg.get("text_cfg", {}), cfg.get("image_cfg", {}), cfg.get("numeric_cfg", {}), output_cache=cfg.get("feature_cache", "data/processed/features.joblib"))
-    X, meta = fb.build(df, text_col=cfg.get("text_col", "Description"), image_col=cfg.get("image_col", "image_path"), force_rebuild=cfg.get("force_rebuild", False))
+    fb = FeatureBuilder(
+        cfg.get("text_cfg", {}),
+        cfg.get("image_cfg", {}),
+        cfg.get("numeric_cfg", {}),
+        selector_cfg=cfg.get("selector_cfg", {}),
+        output_cache=cfg.get("feature_cache", "data/processed/features.joblib"),
+    )
+    X, meta = fb.build(
+        df,
+        text_col=cfg.get("text_col", "Description"),
+        image_col=cfg.get("image_col", "image_path"),
+        force_rebuild=cfg.get("force_rebuild", False),
+        mode=cfg.get("feature_mode", "train"),
+    )
     logger.info("Feature pipeline finished.")
     # persist a small metadata summary
     IO.save_pickle(meta, cfg.get("meta_out", "experiments/reports/feature_meta.joblib"))

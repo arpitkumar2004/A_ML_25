@@ -6,6 +6,7 @@ import joblib
 from sklearn.decomposition import PCA
 from ..utils.logging_utils import LoggerFactory
 from ..utils.io import IO
+from ..utils.fingerprint import stable_hash
 
 logger = LoggerFactory.get("dimensionality")
 
@@ -43,14 +44,38 @@ class DimReducer:
         IO.save_pickle(obj, self.cache_path)
         logger.info(f"Saved dim reducer to {self.cache_path}")
 
-    def fit_transform(self, X: np.ndarray, use_cache: bool = True) -> Tuple[np.ndarray, dict]:
+    def _build_fingerprint(self, X: np.ndarray, user_fingerprint: Optional[str] = None) -> str:
+        if user_fingerprint is not None:
+            return user_fingerprint
+        stats = {
+            "rows": int(X.shape[0]),
+            "cols": int(X.shape[1]),
+            "dtype": str(X.dtype),
+            "mean": float(np.mean(X)) if X.size else 0.0,
+            "std": float(np.std(X)) if X.size else 0.0,
+        }
+        payload = {
+            "method": self.method,
+            "n_components": self.n_components,
+            "random_state": self.random_state,
+            "stats": stats,
+        }
+        return stable_hash(payload)
+
+    def fit_transform(self, X: np.ndarray, use_cache: bool = True, fingerprint: Optional[str] = None) -> Tuple[np.ndarray, dict]:
         """
         Fit transformer and return transformed X and diagnostics.
         If use_cache and cache exists, returns cached transformer result.
         """
+        fp = self._build_fingerprint(X, fingerprint)
         if use_cache and os.path.exists(self.cache_path):
             data = self._load_cache()
-            return data["X_reduced"], data.get("meta", {})
+            if isinstance(data, dict) and data.get("fingerprint") == fp:
+                if "X_reduced" in data:
+                    return data["X_reduced"], data.get("meta", {})
+                if "model" in data:
+                    self.model = data["model"]
+                    return self.model.transform(X), data.get("meta", {})
 
         if self.method == "pca":
             self.model = PCA(n_components=self.n_components, random_state=self.random_state)
@@ -65,7 +90,7 @@ class DimReducer:
         else:
             raise ValueError(f"Unknown reducer: {self.method}")
 
-        self._save_cache({"model": self.model, "X_reduced": Xr, "meta": meta})
+        self._save_cache({"fingerprint": fp, "model": self.model, "X_reduced": Xr, "meta": meta})
         return Xr, meta
 
     def transform(self, X: np.ndarray):

@@ -7,6 +7,15 @@ inference:
   pred_col: "predicted_price"
   feature_cache: "data/processed/features.joblib"
   dim_cache: "data/processed/dimred.joblib"
+  registry_dir: "experiments/registry"
+  latency_log_path: "experiments/monitoring/latency_events.jsonl"
+  selector_cfg:
+    enabled: true
+    method: "f_regression"
+    k: 2048
+    min_features: 128
+    save_path: "data/processed/feature_selector.joblib"
+    random_state: 42
   models_dir: "experiments/models"
   oof_meta_path: "experiments/oof/model_names.joblib"
   stacker_path: "experiments/models/stacker.joblib"

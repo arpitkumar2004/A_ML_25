@@ -16,6 +16,14 @@ training:
   feature_cache: "data/processed/features.joblib"
   dim_cache: "data/processed/dimred.joblib"
   use_dim_cache: true
+  registry_dir: "experiments/registry"
+  selector_cfg:
+    enabled: true
+    method: "f_regression"
+    k: 2048
+    min_features: 128
+    save_path: "data/processed/feature_selector.joblib"
+    random_state: 42
 
   trainer:
     n_splits: 5

@@ -1,5 +1,6 @@
 # src/pipelines/train_pipeline.py
 import os
+import time
 from typing import Dict, Any, Optional
 import numpy as np
 import pandas as pd
@@ -15,6 +16,7 @@ from ..models.lgb_model import LGBModel
 from ..models.linear_model import LinearModel
 from ..models.rf_model import RandomForestModel
 from ..models.stacker import Stacker
+from ..utils.run_registry import make_run_id, write_run_manifest
 
 # Because this is giving error at this time
 try:
@@ -42,22 +44,48 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
     Returns summary dict with model comparison & paths.
     """
     # prepare directories
+    run_id = cfg.get("run_id") or make_run_id(prefix="train")
+    timings = {}
+    t0_total = time.perf_counter()
+
     os.makedirs(cfg.get("experiments_dir", "experiments"), exist_ok=True)
     os.makedirs(cfg.get("models_out", "experiments/models"), exist_ok=True)
     os.makedirs(cfg.get("oof_out", "experiments/oof"), exist_ok=True)
 
     # 1. Load data (optionally sample small fraction for quick dev)
+    t_load = time.perf_counter()
     loader = DatasetLoader(cfg["data_path"])
     df = loader.sample(frac=cfg.get("sample_frac", 1.0), random_state=cfg.get("random_state", 42))
     logger.info(f"Loaded data with {len(df)} rows")
+    timings["load_data"] = round(time.perf_counter() - t_load, 4)
 
     # 2. Parse features
+    t_parse = time.perf_counter()
     df = Parser.add_parsed_features(df, text_col=cfg.get("text_col", "Description"))
+    timings["parse_features"] = round(time.perf_counter() - t_parse, 4)
 
-    # 3. Build features (text + image + numeric)
-    fb = FeatureBuilder(cfg.get("text_cfg", {}), cfg.get("image_cfg", {}), cfg.get("numeric_cfg", {}), output_cache=cfg.get("feature_cache", "data/processed/features.joblib"))
-    X_raw, meta = fb.build(df, text_col=cfg.get("text_col", "Description"), image_col=cfg.get("image_col", "image_path"), force_rebuild=cfg.get("force_rebuild", False))
+    # 3. Prepare target before feature-selection-aware building
+    y = df[cfg.get("target_col", "Price")].values.astype(float)
+
+    # 4. Build features (text + image + numeric + optional selection)
+    t_features = time.perf_counter()
+    fb = FeatureBuilder(
+        cfg.get("text_cfg", {}),
+        cfg.get("image_cfg", {}),
+        cfg.get("numeric_cfg", {}),
+        selector_cfg=cfg.get("selector_cfg", {}),
+        output_cache=cfg.get("feature_cache", "data/processed/features.joblib"),
+    )
+    X_raw, meta = fb.build(
+        df,
+        text_col=cfg.get("text_col", "Description"),
+        image_col=cfg.get("image_col", "image_path"),
+        force_rebuild=cfg.get("force_rebuild", False),
+        y=y,
+        mode="train",
+    )
     logger.info(f"Feature matrix built. meta={meta}")
+    timings["build_features"] = round(time.perf_counter() - t_features, 4)
 
     # 4. Prepare dense for dim reduction
     X_dense = None
@@ -70,18 +98,18 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
         X_dense = np.asarray(X_raw)
 
     # 5. Dimensionality reduction
+    t_dim = time.perf_counter()
     reducer = DimReducer(method=cfg.get("dim_method", "umap"), n_components=cfg.get("dim_components", 50), cache_path=cfg.get("dim_cache", "data/processed/dimred.joblib"))
     if X_dense is not None:
-        X_final, dim_meta = reducer.fit_transform(X_dense, use_cache=cfg.get("use_dim_cache", True))
+        X_final, dim_meta = reducer.fit_transform(X_dense, use_cache=cfg.get("use_dim_cache", True), fingerprint=meta.get("feature_fingerprint"))
     else:
         X_final = X_raw  # sparse, fall back
         dim_meta = {}
     IO.save_pickle(dim_meta, cfg.get("dim_meta_out", "experiments/reports/dim_meta.joblib"))
-
-    # 6. Prepare target
-    y = df[cfg.get("target_col", "Price")].values.astype(float)
+    timings["dimensionality"] = round(time.perf_counter() - t_dim, 4)
 
     # 7. Run CV for each model
+    t_train = time.perf_counter()
     trainer = Trainer(output_dir=cfg.get("models_out", "experiments/models"), n_splits=cfg.get("n_splits", 5), random_state=cfg.get("random_state", 42), stratify=cfg.get("stratify", False))
     results = []
     oof_list = []
@@ -141,9 +169,31 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
         stacker_summary = stacker.fit_cv(meta_ooF, y, fit_final=True)
         IO.save_pickle(stacker_summary, os.path.join(cfg.get("reports_dir", "experiments/reports"), "stacker_summary.joblib"))
         logger.info(f"Stacker finished. summary: {stacker_summary}")
+    timings["train_and_eval"] = round(time.perf_counter() - t_train, 4)
+    timings["total"] = round(time.perf_counter() - t0_total, 4)
+
+    manifest_outputs = {
+        "model_report": cfg.get("report_csv", "experiments/reports/model_comparison.csv"),
+        "oof_path": os.path.join(cfg.get("oof_out", "experiments/oof"), "oof_matrix.joblib"),
+        "dim_cache": cfg.get("dim_cache", "data/processed/dimred.joblib"),
+        "feature_cache": cfg.get("feature_cache", "data/processed/features.joblib"),
+        "selector_path": cfg.get("selector_cfg", {}).get("save_path", "data/processed/feature_selector.joblib"),
+        "numeric_scaler_path": cfg.get("numeric_cfg", {}).get("scaler_path", "data/processed/numeric_scaler.joblib"),
+    }
+    manifest_path = write_run_manifest(
+        run_id=run_id,
+        stage="train",
+        cfg=cfg,
+        outputs=manifest_outputs,
+        timings=timings,
+        registry_dir=cfg.get("registry_dir", "experiments/registry"),
+    )
 
     summary = {
         "model_report": cfg.get("report_csv", "experiments/reports/model_comparison.csv"),
-        "oof_path": os.path.join(cfg.get("oof_out", "experiments/oof"), "oof_matrix.joblib")
+        "oof_path": os.path.join(cfg.get("oof_out", "experiments/oof"), "oof_matrix.joblib"),
+        "run_id": run_id,
+        "manifest_path": manifest_path,
+        "timings_seconds": timings,
     }
     return summary
