@@ -1,0 +1,5 @@
+outs:
+- md5: 098b0c24e2e77f269adfe55c4e41343a
+  size: 1580620
+  hash: md5
+  path: dimred.joblib
