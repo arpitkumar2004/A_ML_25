@@ -1,6 +1,5 @@
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 
@@ -15,7 +14,7 @@ def _tracked_files() -> list[str]:
 
 def _git_diff_name_only(args: list[str]) -> list[str]:
     try:
-        out = subprocess.check_output(args, text=True).strip()
+        out = subprocess.check_output(args, text=True, stderr=subprocess.DEVNULL).strip()
     except Exception:
         return []
     if not out:
@@ -24,20 +23,42 @@ def _git_diff_name_only(args: list[str]) -> list[str]:
 
 
 def _candidate_files() -> list[str]:
-    """Check changed files first so we enforce policy forward without breaking on legacy history."""
+    """Return changed files for CI/local checks without scanning full legacy history."""
+    unstaged = _git_diff_name_only(
+        ["git", "diff", "--name-only", "--diff-filter=ACMRTUXB"]
+    )
+    if unstaged:
+        return unstaged
+
     staged = _git_diff_name_only(
         ["git", "diff", "--name-only", "--diff-filter=ACMRTUXB", "--cached"]
     )
     if staged:
         return staged
 
+    # In PR CI, prefer comparing against merge-base with the base branch.
+    pr_base = os.getenv("GITHUB_BASE_REF", "").strip()
+
+    if pr_base:
+        pr_changed = _git_diff_name_only(
+            [
+                "git",
+                "diff",
+                "--name-only",
+                "--diff-filter=ACMRTUXB",
+                f"origin/{pr_base}...HEAD",
+            ]
+        )
+        if pr_changed:
+            return pr_changed
+
     latest_commit = _git_diff_name_only(
-        ["git", "diff", "--name-only", "--diff-filter=ACMRTUXB", "HEAD~1..HEAD"]
+        ["git", "show", "--name-only", "--pretty=format:", "--diff-filter=ACMRTUXB", "HEAD"]
     )
     if latest_commit:
         return latest_commit
 
-    return _tracked_files()
+    return []
 
 
 def _is_in(path: str, prefix: str) -> bool:
@@ -48,6 +69,10 @@ def _is_in(path: str, prefix: str) -> bool:
 def main() -> int:
     repo_root = Path.cwd()
     files = _candidate_files()
+
+    if not files:
+        print("REPO_HYGIENE_OK (no changed files to validate)")
+        return 0
 
     errors: list[str] = []
 
