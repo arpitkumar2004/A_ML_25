@@ -30,6 +30,9 @@ jobs:
       - name: Unit tests gate
         run: pytest -q ci_cd/tests
 
+      - name: Repo hygiene gate
+        run: python scripts/check_repo_hygiene.py
+
       - name: CLI smoke gate
         run: python main.py --help
 # # write code to .github/workflows/ci.yml

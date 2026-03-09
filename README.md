@@ -179,6 +179,20 @@ python main.py quickrun
 
 ## 6) Serving (Local)
 
+Create local env file first:
+
+```bash
+cp .env.example .env
+```
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Important: if `TEXT_METHOD=tfidf`, `TFIDF_VECTORIZER_PATH` must point to a fitted vectorizer artifact from training.
+
 Start API:
 
 ```bash
@@ -262,14 +276,111 @@ See:
 
 Detailed execution roadmap: `docs/DEVELOPER_ONBOARDING_AND_TECHNICAL_HANDOVER.md` section "10) Target Future Development Plan (Gap Closure Roadmap)".
 
-## 11) Contribution Workflow
+## 11) Experiment Tracking (MLflow and DagsHub)
+
+Training and inference runs are tracked through `src/utils/mlflow_utils.py`.
+
+### Local MLflow tracking
+
+1. Start local MLflow server:
+
+```powershell
+./scripts/start_mlflow_server.ps1 -Port 5000
+```
+
+1. Set tracking env vars:
+
+```powershell
+$env:MLFLOW_ENABLED='1'
+$env:MLFLOW_TRACKING_URI='http://127.0.0.1:5000'
+```
+
+1. Run training experiment:
+
+```powershell
+$env:PYTHONPATH='.'
+python main.py train --config configs/training/final_train.yaml
+```
+
+### DagsHub-backed tracking
+
+Use environment variables for credentials. Do not hardcode tokens in YAML.
+
+```powershell
+$env:MLFLOW_ENABLED='1'
+$env:DAGSHUB_MLFLOW_ENABLED='1'
+$env:DAGSHUB_REPO_OWNER='<your_dagshub_username_or_org>'
+$env:DAGSHUB_REPO_NAME='A_ML_25'
+$env:DAGSHUB_TOKEN='<your_dagshub_access_token>'
+```
+
+Then run:
+
+```powershell
+$env:PYTHONPATH='.'
+python main.py train --config configs/training/final_train.yaml
+```
+
+Expected outputs after run:
+
+- MLflow run metadata in the generated manifest under `outputs.mlflow`.
+- Registry linkage in `experiments/registry/index.json` under `tracking.mlflow`.
+- Run visible in DagsHub experiment UI when DagsHub mode is enabled.
+
+## 12) Contribution Workflow
 
 1. Create focused changes in one subsystem.
 2. Add/update tests under `ci_cd/tests` for behavior changes.
 3. Run local quality checks before PR.
 4. Keep config and artifact paths consistent with existing conventions.
 
-## 12) License and Usage
+## 13) License and Usage
 
 This repository is intended for ML challenge work and production-learning workflows.
 Ensure model/data usage follows challenge rules and organizational policy.
+
+## 14) DVC + Git Best Practices (Implemented)
+
+This repository follows a strict split:
+
+- Git tracks: code, configs, docs, CI, and `.dvc` pointer metadata.
+- DVC tracks: large datasets, feature caches, model artifacts, and generated experiment payloads.
+
+### Daily workflow
+
+1. Pull code and data pointers:
+
+```bash
+git pull
+dvc pull
+```
+
+1. Run training/inference and update artifacts.
+
+1. Track changed payloads with DVC:
+
+```bash
+dvc add data/raw/train.csv data/raw/test.csv
+dvc add data/processed/dimred.joblib data/processed/features.joblib
+dvc add experiments/oof/oof_matrix.joblib experiments/reports/model_comparison.csv
+```
+
+1. Commit pointers and related code/config together:
+
+```bash
+git add .
+git commit -m "feat: update model and DVC pointers"
+```
+
+1. Push data cache then code:
+
+```bash
+dvc push
+git push
+```
+
+### Enforced guardrails
+
+- `.gitignore` blocks large payload directories while allowing `.dvc` files.
+- CI runs `python scripts/check_repo_hygiene.py` to fail PRs if binary payloads are committed directly to Git.
+- If `dvc push` fails due credentials, data pointers may be in Git but remote data will not be available to collaborators until push succeeds.

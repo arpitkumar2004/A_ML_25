@@ -1,10 +1,43 @@
 __pycache__/
 *.pyc
+*.pyo
+
+.venv/
+
 .env
+.env.*
+!.env.example
+
+# DVC policy: keep data payloads out of Git, track only pointer files.
 data/**
 !data/.gitignore
 !data/**/*.dvc
+!data/raw/sample_test.csv
+!data/raw/sample_test_out.csv
+
+# Generated experiment outputs: keep payloads in DVC or local only.
+experiments/models/**
+experiments/oof/**
+experiments/reports/**
+experiments/submissions/**
+experiments/monitoring/**
+!experiments/**/.gitignore
+!experiments/**/*.dvc
+!experiments/**/README.md
+
+# Tracking/metadata stores
+mlruns/
+mlflow.db
+catboost_info/
+
 notebooks/.ipynb_checkpoints
 logs/
 models/
+
+# Binary artifacts should be versioned with DVC, not Git.
 *.joblib
+*.pkl
+*.parquet
+*.onnx
+*.pt
+*.h5
