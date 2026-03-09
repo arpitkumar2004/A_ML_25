@@ -379,6 +379,13 @@ dvc push
 git push
 ```
 
+If you keep DagsHub credentials in `.env`, use the helper script so DVC commands automatically pick them up:
+
+```powershell
+./scripts/dvc_with_env.ps1 push -r origin --all-commits
+./scripts/dvc_with_env.ps1 pull -r origin
+```
+
 ### Enforced guardrails
 
 - `.gitignore` blocks large payload directories while allowing `.dvc` files.
