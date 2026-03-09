@@ -1,7 +1,12 @@
 {
   "run_id": "smoke_infer",
   "stage": "inference",
-  "created_utc": "2026-03-08T01:21:18.205382+00:00",
+  "created_utc": "2026-03-09T16:15:22.271129+00:00",
+  "reproducibility": {
+    "config_sha256": "c5a5022f11d0adbb8de0de9145ef79f403704052d054bf1c4bb76239c97c2b46",
+    "pythonhashseed": "",
+    "seed": null
+  },
   "config": {
     "run_id": "smoke_infer",
     "input_path": "experiments/smoke_check/data/infer_input.csv",
@@ -49,13 +54,24 @@
     "dim_cache": "experiments/smoke_check/data/dimred.joblib",
     "selector_path": "experiments/smoke_check/data/feature_selector.joblib",
     "latency_log_path": "experiments/smoke_check/monitoring/latency_events.jsonl",
-    "rows": 12
+    "rows": 12,
+    "data_quality": {
+      "policy": "allow",
+      "issues": [],
+      "rows": 12
+    },
+    "mlflow": {
+      "enabled": true,
+      "mlflow_run_id": "e636b10b719a4044b6f315b8cdc5d07f",
+      "tracking_uri": "sqlite:///C:/Users/RDRL/Desktop/A_ML_25/mlflow.db",
+      "experiment_name": "A_ML_25"
+    }
   },
   "timings_seconds": {
-    "load_input": 0.0031,
-    "pipeline_init": 0.0,
-    "predict": 0.0225,
-    "postprocess_and_save": 0.0026,
-    "total": 0.0283
+    "load_input": 0.0433,
+    "pipeline_init": 0.0001,
+    "predict": 0.1048,
+    "postprocess_and_save": 0.0053,
+    "total": 0.4691
   }
 }

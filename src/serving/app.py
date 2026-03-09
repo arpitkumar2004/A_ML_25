@@ -15,6 +15,8 @@ from pydantic import BaseModel, Field
 from ..inference.predict import PredictPipeline
 from ..inference.postprocess import Postprocessor
 from ..utils.logging_utils import LoggerFactory
+from ..monitoring.data_quality import validate_batch_quality
+from ..utils.io import IO
 
 logger = LoggerFactory.get("serving_app")
 
@@ -23,6 +25,9 @@ _SERVICE_METRICS = {
     "error_count": 0,
     "predict_count": 0,
     "latencies_ms": [],
+    "fallback_image_rows": 0,
+    "fallback_text_rows": 0,
+    "predict_rows": 0,
 }
 
 
@@ -76,10 +81,30 @@ class ModelService:
 
     @staticmethod
     def _build_pipeline(models_dir: str) -> PredictPipeline:
+        base_dir = os.path.dirname(models_dir.rstrip("/\\"))
         text_method = os.getenv("TEXT_METHOD", "tfidf").lower()
+        tfidf_vectorizer_path = os.getenv(
+            "TFIDF_VECTORIZER_PATH",
+            os.path.join(base_dir, "data", "tfidf_vectorizer.joblib"),
+        )
+        numeric_scaler_path = os.getenv(
+            "NUMERIC_SCALER_PATH",
+            os.path.join(base_dir, "data", "numeric_scaler.joblib"),
+        )
+        selector_path = os.getenv(
+            "FEATURE_SELECTOR_PATH",
+            os.path.join(base_dir, "data", "feature_selector.joblib"),
+        )
+        selector_enabled_env = os.getenv("SELECTOR_ENABLED", "auto").strip().lower()
+        if selector_enabled_env == "auto":
+            selector_enabled = os.path.exists(selector_path)
+        else:
+            selector_enabled = selector_enabled_env == "true"
+
         text_cfg = {
             "method": text_method,
             "cache_path": None,
+            "vectorizer_path": tfidf_vectorizer_path,
             "tfidf_max_features": int(os.getenv("TFIDF_MAX_FEATURES", "1024")),
             "tfidf_ngram_range": (1, 2),
         }
@@ -92,7 +117,8 @@ class ModelService:
         return PredictPipeline(
             text_cfg=text_cfg,
             image_cfg=image_cfg,
-            numeric_cfg=None,
+            numeric_cfg={"scaler_path": numeric_scaler_path},
+            selector_cfg={"enabled": selector_enabled, "save_path": selector_path},
             feature_cache=None,
             dim_cache=os.getenv("DIM_CACHE", "data/processed/dimred.joblib"),
             models_dir=models_dir,
@@ -114,6 +140,29 @@ class ModelService:
 
     def initialize(self):
         models_dir = os.getenv("MODELS_DIR", "experiments/models")
+        base_dir = os.path.dirname(models_dir.rstrip("/\\"))
+        text_method = os.getenv("TEXT_METHOD", "tfidf").lower()
+        tfidf_vectorizer_path = os.getenv("TFIDF_VECTORIZER_PATH", os.path.join(base_dir, "data", "tfidf_vectorizer.joblib"))
+        numeric_scaler_path = os.getenv("NUMERIC_SCALER_PATH", os.path.join(base_dir, "data", "numeric_scaler.joblib"))
+        selector_path = os.getenv("FEATURE_SELECTOR_PATH", os.path.join(base_dir, "data", "feature_selector.joblib"))
+        selector_enabled_env = os.getenv("SELECTOR_ENABLED", "auto").strip().lower()
+        selector_enabled = (os.path.exists(selector_path) if selector_enabled_env == "auto" else selector_enabled_env == "true")
+
+        # TF-IDF serving needs a pre-fitted vectorizer artifact from training.
+        if text_method == "tfidf" and not os.path.exists(tfidf_vectorizer_path):
+            self.ready = False
+            self.ready_reason = f"missing_tfidf_vectorizer:{tfidf_vectorizer_path}"
+            return
+
+        if not os.path.exists(numeric_scaler_path):
+            self.ready = False
+            self.ready_reason = f"missing_numeric_scaler:{numeric_scaler_path}"
+            return
+
+        if selector_enabled and not os.path.exists(selector_path):
+            self.ready = False
+            self.ready_reason = f"missing_feature_selector:{selector_path}"
+            return
 
         if not self._has_fold_models(models_dir):
             self.ready = False
@@ -346,8 +395,8 @@ def healthz():
     return {"status": "ok"}
 
 
-@app.get("/metrics")
-def metrics():
+@app.get("/metrics/json")
+def metrics_json():
     lat = np.asarray(_SERVICE_METRICS["latencies_ms"], dtype=float)
     p50 = float(np.percentile(lat, 50)) if lat.size else 0.0
     p95 = float(np.percentile(lat, 95)) if lat.size else 0.0
@@ -362,7 +411,50 @@ def metrics():
             "percent": float(service.canary_percent),
             "compare": bool(service.compare_canary),
         },
+        "fallback": {
+            "image_rows": int(_SERVICE_METRICS["fallback_image_rows"]),
+            "text_rows": int(_SERVICE_METRICS["fallback_text_rows"]),
+            "predict_rows": int(_SERVICE_METRICS["predict_rows"]),
+        },
     }
+
+
+@app.get("/metrics")
+def metrics():
+    lat = np.asarray(_SERVICE_METRICS["latencies_ms"], dtype=float)
+    p50 = float(np.percentile(lat, 50)) if lat.size else 0.0
+    p95 = float(np.percentile(lat, 95)) if lat.size else 0.0
+    p99 = float(np.percentile(lat, 99)) if lat.size else 0.0
+
+    model_run_id = os.getenv("MODEL_RUN_ID", "unknown")
+    model_version = os.getenv("MODEL_VERSION", "unknown")
+    rows = max(int(_SERVICE_METRICS["predict_rows"]), 1)
+    fallback_image_rate = float(_SERVICE_METRICS["fallback_image_rows"]) / rows
+    fallback_text_rate = float(_SERVICE_METRICS["fallback_text_rows"]) / rows
+
+    labels = f'run_id="{model_run_id}",model_version="{model_version}"'
+    lines = [
+        "# HELP request_count Total number of HTTP requests",
+        "# TYPE request_count counter",
+        f"request_count{{{labels}}} {_SERVICE_METRICS['request_count']}",
+        "# HELP error_count Total number of errors",
+        "# TYPE error_count counter",
+        f"error_count{{{labels}}} {_SERVICE_METRICS['error_count']}",
+        "# HELP predict_count Total number of prediction calls",
+        "# TYPE predict_count counter",
+        f"predict_count{{{labels}}} {_SERVICE_METRICS['predict_count']}",
+        "# HELP latency_ms Latency percentiles in milliseconds",
+        "# TYPE latency_ms gauge",
+        f"latency_ms{{quantile=\"p50\",{labels}}} {p50}",
+        f"latency_ms{{quantile=\"p95\",{labels}}} {p95}",
+        f"latency_ms{{quantile=\"p99\",{labels}}} {p99}",
+        "# HELP fallback_feature_rate Fraction of rows using fallback features",
+        "# TYPE fallback_feature_rate gauge",
+        f"fallback_feature_rate{{feature=\"image\",{labels}}} {fallback_image_rate}",
+        f"fallback_feature_rate{{feature=\"text\",{labels}}} {fallback_text_rate}",
+    ]
+    body = "\n".join(lines) + "\n"
+    return HTMLResponse(content=body, media_type="text/plain; version=0.0.4")
 
 
 @app.get("/readyz")
@@ -394,6 +486,34 @@ def predict(req: PredictRequest):
             raise HTTPException(status_code=413, detail=f"too_many_records:{len(req.records)}>{max_records}")
 
         df = pd.DataFrame(req.records)
+
+        n_rows = len(df)
+        _SERVICE_METRICS["predict_rows"] += n_rows
+        if req.image_col not in df.columns:
+            _SERVICE_METRICS["fallback_image_rows"] += n_rows
+        else:
+            img_empty = df[req.image_col].isna() | (df[req.image_col].astype(str).str.strip() == "")
+            _SERVICE_METRICS["fallback_image_rows"] += int(img_empty.sum())
+        if req.text_col not in df.columns:
+            _SERVICE_METRICS["fallback_text_rows"] += n_rows
+        else:
+            txt_empty = df[req.text_col].isna() | (df[req.text_col].astype(str).str.strip() == "")
+            _SERVICE_METRICS["fallback_text_rows"] += int(txt_empty.sum())
+
+        dq_rules = {
+            "required_columns": [req.text_col, req.id_col],
+            "max_null_rate": float(os.getenv("DQ_MAX_NULL_RATE", "0.5")),
+            "reject_on": ["missing_columns", "out_of_bounds"],
+            "numeric_bounds": {},
+        }
+        dq_result = validate_batch_quality(df, dq_rules)
+        if dq_result.get("policy") == "reject":
+            raise HTTPException(status_code=422, detail={"error": "data_quality_reject", "dq": dq_result})
+        if dq_result.get("policy") == "quarantine":
+            quarantine_path = os.getenv("SERVING_QUARANTINE_PATH", "experiments/quarantine/serving_quarantine.csv")
+            IO.to_csv(df, quarantine_path, index=False)
+            raise HTTPException(status_code=422, detail={"error": "data_quality_quarantine", "dq": dq_result, "path": quarantine_path})
+
         primary_pipeline, variant = service.choose_pipeline()
         preds = primary_pipeline.predict(
             df,

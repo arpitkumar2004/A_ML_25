@@ -1,0 +1,15 @@
+retrain_policy:
+  train_config_path: "configs/training/final_train.yaml"
+  monitoring_dashboard_path: "experiments/monitoring/dashboard.json"
+  latency_log_path: "experiments/monitoring/latency_events.jsonl"
+  registry_dir: "experiments/registry"
+  canary_after_train: true
+  canary_stage: "canary"
+  quality_gates:
+    max_smape: 25.0
+    max_p95_latency_seconds: 5.0
+    max_critical_drift_features: 0
+  triggers:
+    drift_psi_threshold: 0.3
+    latency_p95_seconds_threshold: 5.0
+    max_days_since_last_train: 7

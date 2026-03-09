@@ -1,0 +1,80 @@
+{
+  "run_id": "train_20260309T020733Z",
+  "stage": "train",
+  "created_utc": "2026-03-09T02:08:01.109747+00:00",
+  "reproducibility": {
+    "config_sha256": "dd7b35c52cb894013c672c22867aca8fd2d8ac66ea2fe06c5d3db7fda7c879bb",
+    "pythonhashseed": "42",
+    "seed": 42
+  },
+  "config": {
+    "data_path": "data/interim/train_bootstrap_prepared.csv",
+    "sample_frac": 0.001,
+    "random_state": 42,
+    "seed": 42,
+    "text_col": "Description",
+    "image_col": "__missing_image_col__",
+    "target_col": "Price",
+    "text_cfg": {
+      "method": "tfidf",
+      "cache_path": "data/processed/text_embeddings.joblib",
+      "vectorizer_path": "data/processed/tfidf_vectorizer.joblib",
+      "tfidf_max_features": 1024,
+      "tfidf_ngram_range": [
+        1,
+        2
+      ]
+    },
+    "image_cfg": {
+      "cache_path": "data/processed/image_embeddings.joblib"
+    },
+    "numeric_cfg": {
+      "scaler_path": "data/processed/numeric_scaler.joblib"
+    },
+    "selector_cfg": {
+      "enabled": true,
+      "method": "f_regression",
+      "k": 256,
+      "min_features": 32,
+      "save_path": "data/processed/feature_selector.joblib",
+      "random_state": 42
+    },
+    "feature_cache": "data/processed/features.joblib",
+    "force_rebuild": true,
+    "dim_method": "pca",
+    "dim_components": 32,
+    "dim_cache": "data/processed/dimred.joblib",
+    "use_dim_cache": true,
+    "models_out": "experiments/models",
+    "oof_out": "experiments/oof",
+    "reports_dir": "experiments/reports",
+    "report_out": "experiments/reports/model_comparison.joblib",
+    "report_csv": "experiments/reports/model_comparison.csv",
+    "registry_dir": "experiments/registry",
+    "run_stacker": false,
+    "n_splits": 2,
+    "stratify": false
+  },
+  "outputs": {
+    "model_report": "experiments/reports/model_comparison.csv",
+    "oof_path": "experiments/oof\\oof_matrix.joblib",
+    "dim_cache": "data/processed/dimred.joblib",
+    "feature_cache": "data/processed/features.joblib",
+    "selector_path": "data/processed/feature_selector.joblib",
+    "numeric_scaler_path": "data/processed/numeric_scaler.joblib",
+    "mlflow": {
+      "enabled": true,
+      "mlflow_run_id": "8cd5fdf6ac954ce3a492b945e342abfa",
+      "tracking_uri": "",
+      "experiment_name": "A_ML_25"
+    }
+  },
+  "timings_seconds": {
+    "load_data": 2.4992,
+    "parse_features": 0.1621,
+    "build_features": 0.4454,
+    "dimensionality": 0.12,
+    "train_and_eval": 0.3411,
+    "total": 27.3457
+  }
+}

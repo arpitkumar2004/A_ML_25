@@ -4,8 +4,11 @@ monitoring:
   latency_log_path: "experiments/monitoring/latency_events.jsonl"
   out_json_path: "experiments/monitoring/dashboard.json"
   out_html_path: "experiments/monitoring/dashboard.html"
+  snapshot_history_path: "experiments/monitoring/drift_snapshots.jsonl"
+  alert_payload_path: "experiments/monitoring/alert_payload.json"
   rules:
     psi_warn: 0.2
     psi_critical: 0.3
+    alert_top_drift_features: 5
     latency_p95_total_seconds: 5.0
     latency_p95_seconds_per_row: 0.05

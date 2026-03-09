@@ -176,7 +176,8 @@ class FeatureBuilder:
         if mode == "train":
             X_num, used_numeric_cols = self.numeric_builder.fit(df, numeric_cols=numeric_cols)
         else:
-            X_num, used_numeric_cols = self.numeric_builder.transform(df, numeric_cols=numeric_cols)
+            # In inference, prefer scaler-artifact column schema for strict train/infer parity.
+            X_num, used_numeric_cols = self.numeric_builder.transform(df, numeric_cols=None)
 
         # 4) Combine
         # If X_text is sparse (tfidf), handle separately

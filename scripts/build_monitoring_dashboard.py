@@ -2,7 +2,7 @@ import argparse
 import yaml
 import pandas as pd
 
-from src.monitoring.drift_latency import build_monitoring_report
+from src.monitoring.drift_latency import build_monitoring_report, append_drift_snapshot, write_alert_payload
 
 
 def load_cfg(path: str):
@@ -29,10 +29,17 @@ def main() -> None:
         out_html_path=cfg.get("out_html_path", "experiments/monitoring/dashboard.html"),
     )
 
+    snapshot_path = cfg.get("snapshot_history_path", "experiments/monitoring/drift_snapshots.jsonl")
+    alert_payload_path = cfg.get("alert_payload_path", "experiments/monitoring/alert_payload.json")
+    append_drift_snapshot(snapshot_path, report)
+    write_alert_payload(alert_payload_path, report)
+
     print("DASHBOARD_OK", {
         "alerts": len(report.get("alerts", [])),
         "json": cfg.get("out_json_path"),
         "html": cfg.get("out_html_path"),
+        "snapshot_history": snapshot_path,
+        "alert_payload": alert_payload_path,
     })
 
 

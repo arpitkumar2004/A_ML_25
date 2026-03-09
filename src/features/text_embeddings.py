@@ -125,8 +125,6 @@ class TextEmbedder:
 
         if self.method == "sbert":
             self._init_sbert()
-            with logger.handlers and logger:  # ensure logger exists; no-op context
-                pass
             emb = self._model.encode(texts, show_progress_bar=False, convert_to_numpy=True, batch_size=64)
             self._save_cache(emb, fp)
             return emb

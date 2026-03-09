@@ -1,0 +1,73 @@
+{
+  "run_id": "train_20260309T001739Z",
+  "stage": "train",
+  "created_utc": "2026-03-09T00:17:41.469321+00:00",
+  "reproducibility": {
+    "config_sha256": "eff107f564536d6ba5ab5027bb16b6f45d182f9160207fefe55a4971cba20fcd",
+    "pythonhashseed": "42",
+    "seed": 42
+  },
+  "config": {
+    "data_path": "experiments/smoke_check/data/train_smoke.csv",
+    "sample_frac": 0.01,
+    "random_state": 42,
+    "text_col": "Description",
+    "image_col": "__missing_image_col__",
+    "target_col": "Price",
+    "text_cfg": {
+      "method": "tfidf",
+      "cache_path": "experiments/smoke_check/data/text_embeddings.joblib",
+      "vectorizer_path": "experiments/smoke_check/data/tfidf_vectorizer.joblib",
+      "tfidf_max_features": 512,
+      "tfidf_ngram_range": [
+        1,
+        2
+      ]
+    },
+    "image_cfg": {
+      "cache_path": "experiments/smoke_check/data/image_embeddings.joblib"
+    },
+    "numeric_cfg": {
+      "scaler_path": "experiments/smoke_check/data/numeric_scaler.joblib"
+    },
+    "selector_cfg": {
+      "enabled": true,
+      "method": "f_regression",
+      "k": 128,
+      "min_features": 16,
+      "save_path": "experiments/smoke_check/data/feature_selector.joblib",
+      "random_state": 42
+    },
+    "feature_cache": "experiments/smoke_check/data/features.joblib",
+    "force_rebuild": true,
+    "dim_method": "pca",
+    "dim_components": 16,
+    "dim_cache": "experiments/smoke_check/data/dimred.joblib",
+    "use_dim_cache": true,
+    "models_out": "experiments/smoke_check/models",
+    "oof_out": "experiments/smoke_check/oof",
+    "reports_dir": "experiments/smoke_check/reports",
+    "report_out": "experiments/smoke_check/reports/model_comparison.joblib",
+    "report_csv": "experiments/smoke_check/reports/model_comparison.csv",
+    "registry_dir": "experiments/smoke_check/registry",
+    "run_stacker": false,
+    "n_splits": 2,
+    "stratify": false
+  },
+  "outputs": {
+    "model_report": "experiments/smoke_check/reports/model_comparison.csv",
+    "oof_path": "experiments/smoke_check/oof\\oof_matrix.joblib",
+    "dim_cache": "experiments/smoke_check/data/dimred.joblib",
+    "feature_cache": "experiments/smoke_check/data/features.joblib",
+    "selector_path": "experiments/smoke_check/data/feature_selector.joblib",
+    "numeric_scaler_path": "experiments/smoke_check/data/numeric_scaler.joblib"
+  },
+  "timings_seconds": {
+    "load_data": 0.9207,
+    "parse_features": 0.5008,
+    "build_features": 0.559,
+    "dimensionality": 0.0028,
+    "train_and_eval": 0.0309,
+    "total": 2.0154
+  }
+}

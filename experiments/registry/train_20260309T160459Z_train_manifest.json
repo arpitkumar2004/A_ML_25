@@ -1,0 +1,108 @@
+{
+  "run_id": "train_20260309T160459Z",
+  "stage": "train",
+  "created_utc": "2026-03-09T16:06:03.848474+00:00",
+  "reproducibility": {
+    "config_sha256": "29304bffd97c4dfad334518d303cea93d7c950944c90108d1558497832775001",
+    "pythonhashseed": "",
+    "seed": 42
+  },
+  "config": {
+    "run_full_training": true,
+    "data_path": "data/interim/train_prepared.csv",
+    "sample_frac": 0.005,
+    "target_col": "Price",
+    "text_col": "Description",
+    "image_col": "image_path",
+    "id_col": "unique_identifier",
+    "models": [
+      "Linear",
+      "RF"
+    ],
+    "feature_cache": "data/processed/features.joblib",
+    "dim_cache": "data/processed/dimred.joblib",
+    "use_dim_cache": true,
+    "registry_dir": "experiments/registry",
+    "selector_cfg": {
+      "enabled": true,
+      "method": "f_regression",
+      "k": 2048,
+      "min_features": 128,
+      "save_path": "data/processed/feature_selector.joblib",
+      "random_state": 42
+    },
+    "trainer": {
+      "n_splits": 5,
+      "random_state": 42
+    },
+    "stacker": {
+      "run_stacker": true,
+      "method": "ridge",
+      "n_splits": 5,
+      "params": {
+        "alpha": 1.0
+      }
+    },
+    "quality_gates": {
+      "max_smape": 25.0,
+      "max_p95_latency_seconds": 5.0,
+      "max_critical_drift_features": 0
+    },
+    "mlflow": {
+      "enabled": true,
+      "tracking_uri": "",
+      "experiment_name": "A_ML_25-train",
+      "model_registry": {
+        "enabled": true,
+        "name": "A_ML_25-train-model"
+      },
+      "dagshub": {
+        "enabled": true,
+        "repo_owner": "arpitkumar2004",
+        "repo_name": "A_ML_25",
+        "host": "https://dagshub.com"
+      }
+    },
+    "n_splits": 5,
+    "random_state": 42,
+    "stratify": false,
+    "run_stacker": true,
+    "stacker_method": "ridge",
+    "stacker_n_splits": 5,
+    "stacker_params": {
+      "alpha": 1.0
+    }
+  },
+  "outputs": {
+    "model_report": "experiments/reports/model_comparison.csv",
+    "oof_path": "experiments/oof\\oof_matrix.joblib",
+    "dim_cache": "data/processed/dimred.joblib",
+    "feature_cache": "data/processed/features.joblib",
+    "selector_path": "data/processed/feature_selector.joblib",
+    "numeric_scaler_path": "data/processed/numeric_scaler.joblib",
+    "stacker_summary": "experiments/reports\\stacker_summary.joblib",
+    "mlflow": {
+      "enabled": true,
+      "mlflow_run_id": "ecab715208644eba9bfe0392b86cf38e",
+      "tracking_uri": "https://dagshub.com/arpitkumar2004/A_ML_25.mlflow",
+      "experiment_name": "A_ML_25-train"
+    },
+    "model_registry": {
+      "enabled": true,
+      "registered": true,
+      "registered_model_name": "A_ML_25-train-model",
+      "version": "2",
+      "model_uri": "models:/m-b1070b1d3c8e4737bd9fed36d8542a4a",
+      "artifact_path": "models/rf",
+      "error": ""
+    }
+  },
+  "timings_seconds": {
+    "load_data": 1.8873,
+    "parse_features": 0.7731,
+    "build_features": 0.065,
+    "dimensionality": 0.0202,
+    "train_and_eval": 52.4988,
+    "total": 64.0101
+  }
+}

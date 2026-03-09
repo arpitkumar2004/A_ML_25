@@ -1,6 +1,7 @@
 training:
   run_full_training: true
-  sample_frac: 1.0
+  data_path: "data/interim/train_prepared.csv"
+  sample_frac: 0.005
   target_col: "Price"
   text_col: "Description"
   image_col: "image_path"
@@ -9,9 +10,6 @@ training:
   models:
     - "Linear"
     - "RF"
-    - "LGBM"
-    - "XGB"
-    - "Cat"
 
   feature_cache: "data/processed/features.joblib"
   dim_cache: "data/processed/dimred.joblib"
@@ -35,3 +33,21 @@ training:
     n_splits: 5
     params:
       alpha: 1.0
+
+  quality_gates:
+    max_smape: 25.0
+    max_p95_latency_seconds: 5.0
+    max_critical_drift_features: 0
+
+  mlflow:
+    enabled: true
+    tracking_uri: ""
+    experiment_name: "A_ML_25-train"
+    model_registry:
+      enabled: true
+      name: "A_ML_25-train-model"
+    dagshub:
+      enabled: true
+      repo_owner: "arpitkumar2004"
+      repo_name: "A_ML_25"
+      host: "https://dagshub.com"

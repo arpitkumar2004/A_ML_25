@@ -1,1 +1,17 @@
-# mlflow server config placeholder\n
+mlflow:
+  tracking_uri: "http://127.0.0.1:5000"
+  backend_store_uri: "sqlite:///mlflow.db"
+  default_artifact_root: "./experiments/mlflow_artifacts"
+  host: "127.0.0.1"
+  port: 5000
+  command:
+    - "mlflow"
+    - "server"
+    - "--backend-store-uri"
+    - "sqlite:///mlflow.db"
+    - "--default-artifact-root"
+    - "./experiments/mlflow_artifacts"
+    - "--host"
+    - "127.0.0.1"
+    - "--port"
+    - "5000"

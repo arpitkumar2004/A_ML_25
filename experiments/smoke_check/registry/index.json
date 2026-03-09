@@ -14,7 +14,63 @@
       "stage": "inference",
       "status": "recorded",
       "created_utc": "2026-03-08T01:21:18.217901+00:00",
-      "updated_utc": "2026-03-08T01:21:18.217901+00:00"
+      "updated_utc": "2026-03-09T16:15:22.313059+00:00",
+      "tracking": {
+        "mlflow": {
+          "enabled": true,
+          "mlflow_run_id": "e636b10b719a4044b6f315b8cdc5d07f",
+          "tracking_uri": "sqlite:///C:/Users/RDRL/Desktop/A_ML_25/mlflow.db",
+          "experiment_name": "A_ML_25"
+        }
+      }
+    },
+    {
+      "run_id": "train_20260309T001254Z",
+      "manifest_path": "experiments/smoke_check/registry\\train_20260309T001254Z_train_manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "created_utc": "2026-03-09T00:12:56.999859+00:00",
+      "updated_utc": "2026-03-09T00:12:56.999859+00:00"
+    },
+    {
+      "run_id": "train_20260309T001452Z",
+      "manifest_path": "experiments/smoke_check/registry\\train_20260309T001452Z_train_manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "created_utc": "2026-03-09T00:14:55.870971+00:00",
+      "updated_utc": "2026-03-09T00:14:55.870971+00:00"
+    },
+    {
+      "run_id": "train_20260309T001639Z",
+      "manifest_path": "experiments/smoke_check/registry\\train_20260309T001639Z_train_manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "created_utc": "2026-03-09T00:16:41.075910+00:00",
+      "updated_utc": "2026-03-09T00:16:41.075910+00:00"
+    },
+    {
+      "run_id": "train_20260309T001739Z",
+      "manifest_path": "experiments/smoke_check/registry\\train_20260309T001739Z_train_manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "created_utc": "2026-03-09T00:17:41.471321+00:00",
+      "updated_utc": "2026-03-09T00:17:41.471321+00:00"
+    },
+    {
+      "run_id": "train_20260309T161442Z",
+      "manifest_path": "experiments/smoke_check/registry\\train_20260309T161442Z_train_manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "mlflow": {
+          "enabled": true,
+          "mlflow_run_id": "b163b7db81fc4b0b93792e2e8657fbb9",
+          "tracking_uri": "sqlite:///C:/Users/RDRL/Desktop/A_ML_25/mlflow.db",
+          "experiment_name": "A_ML_25"
+        }
+      },
+      "created_utc": "2026-03-09T16:15:21.304522+00:00",
+      "updated_utc": "2026-03-09T16:15:21.304522+00:00"
     }
   ],
   "active_production_run_id": "train_20260308T012116Z"

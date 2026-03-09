@@ -1,0 +1,89 @@
+{
+  "run_id": "train_20260309T161442Z",
+  "stage": "train",
+  "created_utc": "2026-03-09T16:15:21.296902+00:00",
+  "reproducibility": {
+    "config_sha256": "eff107f564536d6ba5ab5027bb16b6f45d182f9160207fefe55a4971cba20fcd",
+    "pythonhashseed": "",
+    "seed": 42
+  },
+  "config": {
+    "data_path": "experiments/smoke_check/data/train_smoke.csv",
+    "sample_frac": 0.01,
+    "random_state": 42,
+    "text_col": "Description",
+    "image_col": "__missing_image_col__",
+    "target_col": "Price",
+    "text_cfg": {
+      "method": "tfidf",
+      "cache_path": "experiments/smoke_check/data/text_embeddings.joblib",
+      "vectorizer_path": "experiments/smoke_check/data/tfidf_vectorizer.joblib",
+      "tfidf_max_features": 512,
+      "tfidf_ngram_range": [
+        1,
+        2
+      ]
+    },
+    "image_cfg": {
+      "cache_path": "experiments/smoke_check/data/image_embeddings.joblib"
+    },
+    "numeric_cfg": {
+      "scaler_path": "experiments/smoke_check/data/numeric_scaler.joblib"
+    },
+    "selector_cfg": {
+      "enabled": true,
+      "method": "f_regression",
+      "k": 128,
+      "min_features": 16,
+      "save_path": "experiments/smoke_check/data/feature_selector.joblib",
+      "random_state": 42
+    },
+    "feature_cache": "experiments/smoke_check/data/features.joblib",
+    "force_rebuild": true,
+    "dim_method": "pca",
+    "dim_components": 16,
+    "dim_cache": "experiments/smoke_check/data/dimred.joblib",
+    "use_dim_cache": true,
+    "models_out": "experiments/smoke_check/models",
+    "oof_out": "experiments/smoke_check/oof",
+    "reports_dir": "experiments/smoke_check/reports",
+    "report_out": "experiments/smoke_check/reports/model_comparison.joblib",
+    "report_csv": "experiments/smoke_check/reports/model_comparison.csv",
+    "registry_dir": "experiments/smoke_check/registry",
+    "run_stacker": false,
+    "n_splits": 2,
+    "stratify": false
+  },
+  "outputs": {
+    "model_report": "experiments/smoke_check/reports/model_comparison.csv",
+    "oof_path": "experiments/smoke_check/oof\\oof_matrix.joblib",
+    "dim_cache": "experiments/smoke_check/data/dimred.joblib",
+    "feature_cache": "experiments/smoke_check/data/features.joblib",
+    "selector_path": "experiments/smoke_check/data/feature_selector.joblib",
+    "numeric_scaler_path": "experiments/smoke_check/data/numeric_scaler.joblib",
+    "stacker_summary": "experiments/smoke_check/reports\\stacker_summary.joblib",
+    "mlflow": {
+      "enabled": true,
+      "mlflow_run_id": "b163b7db81fc4b0b93792e2e8657fbb9",
+      "tracking_uri": "sqlite:///C:/Users/RDRL/Desktop/A_ML_25/mlflow.db",
+      "experiment_name": "A_ML_25"
+    },
+    "model_registry": {
+      "enabled": true,
+      "registered": true,
+      "registered_model_name": "A_ML_25-train-model",
+      "version": 1,
+      "model_uri": "models:/m-b031e0c35bbe4978974376cebe00f9d8",
+      "artifact_path": "models/linear",
+      "error": ""
+    }
+  },
+  "timings_seconds": {
+    "load_data": 2.7804,
+    "parse_features": 1.1452,
+    "build_features": 1.562,
+    "dimensionality": 0.0064,
+    "train_and_eval": 18.0159,
+    "total": 38.5069
+  }
+}

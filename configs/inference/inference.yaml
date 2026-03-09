@@ -22,3 +22,12 @@ inference:
   target_transform: "log1p"  # if model trained on log1p
   round: true
   min_value: 0.0
+  mlflow:
+    enabled: true
+    tracking_uri: ""
+    experiment_name: "A_ML_25-inference"
+    dagshub:
+      enabled: false
+      repo_owner: ""
+      repo_name: ""
+      host: "https://dagshub.com"

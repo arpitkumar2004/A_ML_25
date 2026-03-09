@@ -127,7 +127,40 @@ def evaluate_alerts(drift_df: pd.DataFrame, latency_summary: Dict[str, float], r
             "threshold": per_row_p95_limit,
         })
 
+    if alerts:
+        top_k = int(rules.get("alert_top_drift_features", 5))
+        top_rows = drift_df.head(top_k).to_dict(orient="records") if not drift_df.empty else []
+        for a in alerts:
+            a["top_drift_features"] = [
+                {"feature": r.get("feature"), "psi": r.get("psi")} for r in top_rows
+            ]
     return alerts
+
+
+def append_drift_snapshot(path: str, report: Dict[str, Any]) -> None:
+    from ..utils.run_registry import append_jsonl
+
+    top = report.get("drift_top", [])
+    snapshot = {
+        "max_psi": max([float(r.get("psi", 0.0)) for r in top], default=0.0),
+        "top_drift_features": [
+            {"feature": r.get("feature"), "psi": r.get("psi")} for r in top[:5]
+        ],
+        "latency_summary": report.get("latency_summary", {}),
+        "alert_count": len(report.get("alerts", [])),
+    }
+    append_jsonl(path, snapshot)
+
+
+def write_alert_payload(path: str, report: Dict[str, Any]) -> None:
+    payload = {
+        "alerts": report.get("alerts", []),
+        "top_drift_features": [
+            {"feature": r.get("feature"), "psi": r.get("psi")} for r in report.get("drift_top", [])[:5]
+        ],
+        "latency_summary": report.get("latency_summary", {}),
+    }
+    IO.save_json(payload, path, indent=2)
 
 
 def build_monitoring_report(
