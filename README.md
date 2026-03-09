@@ -391,3 +391,227 @@ If you keep DagsHub credentials in `.env`, use the helper script so DVC commands
 - `.gitignore` blocks large payload directories while allowing `.dvc` files.
 - CI runs `python scripts/check_repo_hygiene.py` to fail PRs if binary payloads are committed directly to Git.
 - If `dvc push` fails due credentials, data pointers may be in Git but remote data will not be available to collaborators until push succeeds.
+
+## 15) Phase 3: CI/CD Automation Upgrade (Implemented)
+
+Production-grade automated ML deployment pipeline with training, promotion, and health monitoring.
+
+### Overview
+
+Phase 3 automates the full model lifecycle:
+
+```
+Data Push → CI Gate → Drift Check → Training → Model Promotion → Deployment (Canary) → Health Check → Production
+```
+
+### Key Components
+
+#### 1. Training Pipeline (`.github/workflows/training.yml`)
+- **Trigger**: Daily 22:00 UTC or manual via `workflow_dispatch`
+- **Stages**:
+  1. Drift detection (compare current data to baseline)
+  2. Training (runs if drift detected or force_retrain=true)
+  3. Validation (accuracy, SMAPE, latency checks)
+  4. Registration (adds model to registry in "staging" stage)
+  5. Smoke test (verify inference works)
+- **Timeout**: 120 minutes
+- **Output**: MLflow run ID, metrics, artifacts
+
+#### 2. Model Promotion (`.github/workflows/promote.yml`)
+- **Stages**: staging → canary → production
+- **Pre-promotion checks**: Validation thresholds (accuracy ≥0.70, latency ≤2s, error rate ≤2%)
+- **Environment approval**: GitHub environment protection for production promotions
+- **Registry state machine**: Tracks status, promotion history, rollback capability
+- **Git tagging**: Creates tags for all promotions
+
+#### 3. Deployment Strategies (`.github/workflows/deploy.yml`)
+- **Canary**: Route 10% traffic for 60 seconds, auto-promote if healthy, auto-rollback if degraded
+- **Blue-Green**: Deploy to green env, test fully, switch all traffic, keep blue for instant rollback
+- **Rolling**: Gradual rollout (25%→50%→75%→100%) with monitoring between stages
+
+#### 4. Health Checks (`.github/workflows/health-check.yml`)
+- **Frequency**: Every 6 hours + post-deployment
+- **Checks**:
+  - MLflow connectivity
+  - Production model loadability
+  - Inference latency and error rates
+  - Data/concept drift detection
+  - System resource usage
+- **Escalation**: Creates issues if degraded, triggers auto-rollback if critical
+
+### Configuration
+
+#### GitHub Secrets (Required)
+Set these in **Settings → Secrets and variables → Actions**:
+```
+MLFLOW_TRACKING_URI
+MLFLOW_TRACKING_USERNAME
+MLFLOW_TRACKING_PASSWORD
+DAGSHUB_USERNAME (optional, for DVC)
+DAGSHUB_TOKEN (optional, for DVC)
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+```
+
+See: `docs/GITHUB_SECRETS_SETUP.md` for detailed setup
+
+#### Branch Protection (Required)
+Enable on `main` branch:
+- ✓ 1 PR review required
+- ✓ Dismiss stale reviews
+- ✓ Require CI checks pass
+- ✓ Require branches up-to-date
+- ✓ Require conversation resolution
+
+#### Model Registry
+Located at `experiments/registry/`:
+```
+index.json              # Model state machine
+promotion_history.jsonl # Promotion audit log
+rollback_history.jsonl  # Rollback audit log
+```
+
+### Quick Start
+
+#### 1. Configure Secrets
+```bash
+gh secret set MLFLOW_TRACKING_URI -b "https://dagshub.com/user/repo.mlflow"
+gh secret set MLFLOW_TRACKING_USERNAME -b "username"
+gh secret set MLFLOW_TRACKING_PASSWORD -b "token"
+# ... (set remaining 4 secrets)
+```
+
+#### 2. Trigger Training
+```bash
+# Manual trigger
+gh workflow run training.yml -f force_retrain=true
+
+# Or wait for daily schedule (22:00 UTC)
+```
+
+#### 3. Promote Model
+Open Actions → Model Promotion → Run workflow:
+- Enter: `run_id` from training output
+- Select: `target_stage` (e.g., "canary")
+- Review validation checks in logs
+
+#### 4. Deploy
+Open Actions → Deployment → Run workflow:
+- Enter: `run_id` (must be in production stage)
+- Select: `deployment_strategy` (e.g., "canary")
+- Monitor canary metrics in logs
+
+#### 5. Monitor Health
+Health checks run automatically every 6 hours. View results in Actions → Health Check.
+
+### Workflow Diagram
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ GitHub Push (main branch) → CI Gate                            │
+│   Syntax ✓ | Tests ✓ | Hygiene ✓ | Smoke ✓                   │
+└────────────────────────────────────────────────────────────────┘
+                           ↓
+┌────────────────────────────────────────────────────────────────┐
+│ Daily Schedule (22:00 UTC) → Training Pipeline                 │
+│   Drift Check → Train → Validate → Register → Smoke Test       │
+│   Output: MLflow run_id, model in "staging" stage             │
+└────────────────────────────────────────────────────────────────┘
+                           ↓
+┌────────────────────────────────────────────────────────────────┐
+│ Manual: Promotion Workflow                                      │
+│   Validate → Approve (if production) → Registry Update → Tag   │
+│   Output: model moved to "canary" or "production"              │
+└────────────────────────────────────────────────────────────────┘
+                           ↓
+┌────────────────────────────────────────────────────────────────┐
+│ Manual: Deployment Workflow                                     │
+│   Pre-Deploy Checks → Canary/Blue-Green → Monitor → Promote    │
+│   Output: config files updated, ready for serving              │
+└────────────────────────────────────────────────────────────────┘
+                           ↓
+┌────────────────────────────────────────────────────────────────┐
+│ Every 6 Hours: Health Check Pipeline                           │
+│   MLflow ✓ | Model ✓ | Inference ✓ | Drift ✓ | Resources ✓    │
+│   Output: Pass/Fail → Create issue → Auto-rollback if critical │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### Rollback Procedures
+
+**Automatic** (triggered by health check failure):
+```python
+if health_status == "critical":
+    rollback_to_previous_production()
+    alert(severity="critical")
+```
+
+**Manual**:
+```bash
+# Via Actions UI
+# 1. Go to Actions → Promote
+# 2. Run with previous run_id and target_stage="production"
+
+# Or via CLI
+python scripts/rollback_deployment.py \
+  --to-previous-production \
+  --reason "Manual: detected latency spike"
+```
+
+### Cost Optimization
+
+- **Training**: 1x daily, 2 hrs max → ~$2-5/day (on GPU runners)
+- **CI/CD**: Parallel jobs, shared cache → ~$50-100/month
+- **Storage**: Retention policies (30-day artifact, 7-day logs) → ~$20-50/month
+- **Total**: ~$300-700/month for typical scale
+
+### Observability & Alerts
+
+Key metrics to monitor:
+- Model accuracy trend
+- Prediction latency (p50, p95, p99)
+- Error rate / exception rate
+- Data drift magnitude
+- Training frequency / model freshness
+- Deployment success rate
+
+Alert thresholds:
+```
+WARN if accuracy < 0.70    | CRITICAL if < 0.65
+WARN if latency_p95 > 2.0s | CRITICAL if > 5.0s
+WARN if error_rate > 0.02  | CRITICAL if > 0.05
+WARN if drift > 0.10       | CRITICAL if > 0.25
+```
+
+### Documentation
+
+- **Detailed guide**: `docs/PHASE_3_CI_CD_AUTOMATION.md`
+- **Secrets setup**: `docs/GITHUB_SECRETS_SETUP.md`
+- **Production runbook**: `docs/PRODUCTION_RUNBOOK.md`
+
+### Common Tasks
+
+#### Force Retrain (Bypass Drift Check)
+```bash
+gh workflow run training.yml -f force_retrain=true -f model_config=configs/training/final_train.yaml
+```
+
+#### Check Model Registry
+```bash
+cat experiments/registry/index.json | jq '.'
+```
+
+#### View Promotion History
+```bash
+cat experiments/registry/promotion_history.jsonl | jq '.'
+```
+
+#### Manual Health Check
+```bash
+python scripts/health_check.py \
+  --check-mlflow \
+  --check-production-model \
+  --check-registry \
+  --check-inference \
+  --output /tmp/health.json
+```

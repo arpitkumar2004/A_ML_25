@@ -1,0 +1,160 @@
+name: Model Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'MLflow run ID to promote'
+        required: true
+      target_stage:
+        description: 'Target stage (staging -> production)'
+        required: true
+        type: choice
+        options:
+          - staging
+          - canary
+          - production
+
+jobs:
+  pre-promotion-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      approved: ${{ steps.checks.outputs.approved }}
+      model_metrics: ${{ steps.checks.outputs.metrics }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate run and fetch metrics
+        id: checks
+        env:
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+          MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+        run: |
+          python scripts/validate_promotion.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --target-stage "${{ github.event.inputs.target_stage }}" \
+            --output /tmp/promotion_check.json
+          
+          # Parse validation result
+          python -c "
+          import json
+          with open('/tmp/promotion_check.json') as f:
+              result = json.load(f)
+          print(f\"approved={'true' if result.get('passed') else 'false'}\")
+          print(f\"metrics={json.dumps(result.get('metrics', {}))}\")
+          " >> $GITHUB_OUTPUT
+
+      - name: Upload validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: promotion-validation
+          path: /tmp/promotion_check.json
+          retention-days: 30
+
+  # Require manual approval for production promotions
+  approval:
+    needs: pre-promotion-checks
+    if: github.event.inputs.target_stage == 'production' && needs.pre-promotion-checks.outputs.approved == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Approval required
+        run: echo "Production promotion approved by GitHub environment protection"
+
+  promote:
+    needs: [pre-promotion-checks, approval]
+    if: always() && needs.pre-promotion-checks.outputs.approved == 'true' && (github.event.inputs.target_stage != 'production' || needs.approval.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Promote model in registry
+        run: |
+          python scripts/promote_model.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --target-stage "${{ github.event.inputs.target_stage }}" \
+            --promoted-by "${{ github.actor }}" \
+            --promotion-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Tag git commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          TAG="model/${{ github.event.inputs.target_stage }}-${{ github.event.inputs.run_id }}-$(date +%Y%m%d_%H%M%S)"
+          git tag -a "$TAG" -m "Model promotion: ${{ github.event.inputs.run_id }} -> ${{ github.event.inputs.target_stage }}" HEAD 2>/dev/null || true
+          git push origin "$TAG" 2>/dev/null || true
+
+      - name: Publish release
+        if: github.event.inputs.target_stage == 'production'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v/${{ github.event.inputs.run_id }}
+          release_name: "Production Release - ${{ github.event.inputs.run_id }}"
+          body: |
+            ## Model Promotion
+            - Run ID: ${{ github.event.inputs.run_id }}
+            - Target Stage: ${{ github.event.inputs.target_stage }}
+            - Promoted by: ${{ github.actor }}
+            - Metrics: ${{ needs.pre-promotion-checks.outputs.model_metrics }}
+
+  post-promotion:
+    needs: [promote]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Update deployment manifest
+        if: github.event.inputs.target_stage == 'production'
+        run: |
+          python scripts/update_deployment_manifest.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --stage "${{ github.event.inputs.target_stage }}" \
+            --manifest-path experiments/registry/deployment_manifest.json
+
+      - name: Notify deployment system
+        if: github.event.inputs.target_stage == 'production'
+        run: |
+          # Trigger deployment workflow via workflow_dispatch
+          echo "Deployment manifest updated. Manual deployment via deploy.yml workflow."

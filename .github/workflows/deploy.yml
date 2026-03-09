@@ -1,0 +1,264 @@
+name: Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'MLflow run ID to deploy (must be in production stage)'
+        required: true
+      deployment_strategy:
+        description: 'Deployment strategy'
+        required: true
+        type: choice
+        options:
+          - canary
+          - blue_green
+          - rolling
+        default: canary
+      canary_percent:
+        description: 'Canary traffic percentage (1-100), only for canary strategy'
+        required: false
+        default: '10'
+
+jobs:
+  pre-deployment-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      deployment_approved: ${{ steps.checks.outputs.approved }}
+      health_status: ${{ steps.checks.outputs.health_status }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify production readiness
+        id: checks
+        run: |
+          python scripts/pre_deployment_checks.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --output /tmp/deployment_checks.json \
+            --check-tests \
+            --check-coverage \
+            --check-security
+          
+          python -c "
+          import json
+          with open('/tmp/deployment_checks.json') as f:
+              result = json.load(f)
+          print(f\"approved={'true' if result.get('all_passed') else 'false'}\")
+          print(f\"health_status={json.dumps(result.get('health_checks', {}))}\")
+          " >> $GITHUB_OUTPUT
+
+      - name: Run model inference tests
+        run: |
+          python scripts/test_model_inference.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --test-dataset data/test.csv \
+            --min-accuracy 0.70
+
+      - name: Upload pre-deployment report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-deployment-report
+          path: /tmp/deployment_checks.json
+          retention-days: 30
+
+  canary-deployment:
+    needs: pre-deployment-checks
+    if: |
+      github.event.inputs.deployment_strategy == 'canary' &&
+      needs.pre-deployment-checks.outputs.deployment_approved == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Deploy canary (read config)
+        run: |
+          # For local demo: update a canary routing config
+          python -c "
+          import json
+          config = {
+              'production_run_id': '${{ github.event.inputs.run_id }}',
+              'canary_enabled': True,
+              'canary_percent': int('${{ github.event.inputs.canary_percent || 10 }}'),
+              'deployment_time': '$(date -u +%Y-%m-%dT%H:%M:%SZ)',
+              'deployed_by': '${{ github.actor }}'
+          }
+          with open('experiments/registry/canary_config.json', 'w') as f:
+              json.dump(config, f, indent=2)
+          "
+          
+          # Read the config to verify
+          cat experiments/registry/canary_config.json
+
+      - name: Wait for canary warm-up (30 seconds)
+        run: sleep 30
+
+      - name: Monitor canary metrics
+        id: monitor
+        run: |
+          python scripts/monitor_canary_metrics.py \
+            --duration 60 \
+            --sample-size 100 \
+            --alert-threshold-latency 2.0 \
+            --alert-threshold-error-rate 0.05 \
+            --output /tmp/canary_metrics.json
+          
+          python -c "
+          import json
+          with open('/tmp/canary_metrics.json') as f:
+              result = json.load(f)
+          print(f\"metrics_healthy={'true' if result.get('passed') else 'false'}\")
+          " >> $GITHUB_OUTPUT
+
+      - name: Promote canary to full deployment
+        if: steps.monitor.outputs.metrics_healthy == 'true'
+        run: |
+          python -c "
+          import json
+          with open('experiments/registry/canary_config.json') as f:
+              config = json.load(f)
+          config['canary_enabled'] = False
+          config['canary_percent'] = 100
+          config['promoted_to_production_time'] = '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+          with open('experiments/registry/canary_config.json', 'w') as f:
+              json.dump(config, f, indent=2)
+          "
+          echo "✓ Canary promoted to full deployment"
+
+      - name: Rollback on failure
+        if: failure() || steps.monitor.outputs.metrics_healthy == 'false'
+        run: |
+          echo "Rolling back canary deployment..."
+          python scripts/rollback_deployment.py \
+            --to-previous-production \
+            --reason "Canary metrics unhealthy"
+
+      - name: Upload canary metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canary-metrics
+          path: /tmp/canary_metrics.json
+          retention-days: 7
+
+  blue-green-deployment:
+    needs: pre-deployment-checks
+    if: |
+      github.event.inputs.deployment_strategy == 'blue_green' &&
+      needs.pre-deployment-checks.outputs.deployment_approved == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Deploy to green environment
+        run: |
+          python -c "
+          import json
+          config = {
+              'production_run_id': '${{ github.event.inputs.run_id }}',
+              'active_environment': 'blue',
+              'blue_run_id': 'current_production',
+              'green_run_id': '${{ github.event.inputs.run_id }}',
+              'deployment_time': '$(date -u +%Y-%m-%dT%H:%M:%SZ)',
+              'deployed_by': '${{ github.actor }}'
+          }
+          with open('experiments/registry/blue_green_config.json', 'w') as f:
+              json.dump(config, f, indent=2)
+          "
+
+      - name: Test green environment
+        run: |
+          python scripts/test_model_inference.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --test-dataset data/test.csv \
+            --min-accuracy 0.70
+
+      - name: Switch traffic to green
+        run: |
+          python -c "
+          import json
+          with open('experiments/registry/blue_green_config.json') as f:
+              config = json.load(f)
+          config['active_environment'] = 'green'
+          config['traffic_switch_time'] = '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+          with open('experiments/registry/blue_green_config.json', 'w') as f:
+              json.dump(config, f, indent=2)
+          "
+          echo "✓ Traffic switched to green (production)"
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Rolling back to blue environment..."
+          python -c "
+          import json
+          with open('experiments/registry/blue_green_config.json') as f:
+              config = json.load(f)
+          config['active_environment'] = 'blue'
+          with open('experiments/registry/blue_green_config.json', 'w') as f:
+              json.dump(config, f, indent=2)
+          "
+
+  post-deployment:
+    needs: [pre-deployment-checks]
+    if: |
+      always() &&
+      needs.pre-deployment-checks.outputs.deployment_approved == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Update production tracker
+        run: |
+          python scripts/update_production_tracker.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --strategy "${{ github.event.inputs.deployment_strategy }}" \
+            --manifest-path experiments/registry/production_tracker.json
+
+      - name: Trigger health check workflow
+        run: echo "Health check workflow can be triggered separately"
+
+      - name: Notify channels
+        run: echo "Deployment notification can integrate with Slack/PagerDuty"

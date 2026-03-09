@@ -1,0 +1,196 @@
+name: Training Pipeline
+
+on:
+  schedule:
+    # Run daily retraining at 22:00 UTC (adjust to your preferred time)
+    - cron: '0 22 * * *'
+  workflow_dispatch:
+    inputs:
+      force_retrain:
+        description: 'Force full retraining (bypass drift check)'
+        required: false
+        default: 'false'
+      model_config:
+        description: 'Training config (e.g., configs/training/final_train.yaml)'
+        required: false
+        default: 'configs/training/final_train.yaml'
+
+jobs:
+  drift-check:
+    # Fast decision gate: should we retrain?
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      should_train: ${{ steps.drift.outputs.should_train }}
+      drift_reason: ${{ steps.drift.outputs.reason }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check data/concept drift
+        id: drift
+        run: |
+          # Force retrain flag overrides drift check
+          if [[ "${{ github.event.inputs.force_retrain }}" == "true" ]]; then
+            echo "should_train=true" >> $GITHUB_OUTPUT
+            echo "reason=Force retrain requested via workflow_dispatch" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Otherwise, run drift detection
+          python scripts/check_data_drift.py \
+            --compare-against experiments/registry/baseline_stats.json \
+            --output /tmp/drift_check.json
+          
+          # Parse drift result
+          python -c "
+          import json
+          with open('/tmp/drift_check.json') as f:
+              result = json.load(f)
+          print(f\"should_train={'true' if result.get('drift_detected') else 'false'}\")
+          print(f\"reason={result.get('reason', 'No significant drift')}\" )
+          " >> $GITHUB_OUTPUT
+
+      - name: Upload drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-check-report
+          path: /tmp/drift_check.json
+          retention-days: 7
+
+  train:
+    needs: drift-check
+    # Only train if drift detected or force_retrain=true
+    if: needs.drift-check.outputs.should_train == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download training data
+        run: |
+          # Use DVC pull if available (requires credentials)
+          if command -v dvc &> /dev/null; then
+            dvc pull -r origin data/raw/ 2>/dev/null || true
+          fi
+
+      - name: Run training pipeline
+        id: train
+        env:
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+          MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+          MLFLOW_ENABLED: 'true'
+        run: |
+          CONFIG="${{ github.event.inputs.model_config || 'configs/training/final_train.yaml' }}"
+          echo "Training with config: $CONFIG"
+          
+          # Run training
+          python main.py train \
+            --config "$CONFIG" \
+            --output-dir experiments/training_runs/$(date +%Y%m%d_%H%M%S)
+          
+          # Capture run_id from MLflow
+          RUN_ID=$(python -c "
+          import mlflow
+          mlflow.set_tracking_uri('${{ secrets.MLFLOW_TRACKING_URI }}')
+          experiments = mlflow.search_experiments(order_by=['creation_time DESC'], max_results=1)
+          if experiments:
+              runs = mlflow.search_runs(experiment_ids=[experiments[0].experiment_id], order_by=['start_time DESC'], max_results=1)
+              if runs:
+                  print(runs[0].run_id)
+          ")
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
+      - name: Validate model performance
+        id: validate
+        run: |
+          python scripts/validate_training.py \
+            --min-smape-improvement 0.02 \
+            --max-train-time 3600 \
+            --output /tmp/validation.json && echo "validation_passed=true" >> $GITHUB_OUTPUT || echo "validation_passed=false" >> $GITHUB_OUTPUT
+
+      - name: Register trained model
+        if: steps.validate.outputs.validation_passed == 'true'
+        run: |
+          python scripts/register_model.py \
+            --run-id "${{ steps.train.outputs.run_id }}" \
+            --stage "staging" \
+            --tags "automated_training=true,drift_reason=${{ needs.drift-check.outputs.drift_reason }}"
+
+      - name: Upload training artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-artifacts
+          path: |
+            experiments/training_runs/*/
+            /tmp/validation.json
+          retention-days: 30
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "⚠️ Training pipeline failed!"
+          echo "Drift reason: ${{ needs.drift-check.outputs.drift_reason }}"
+
+  post-train-smoke:
+    needs: [drift-check, train]
+    if: needs.drift-check.outputs.should_train == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run inference smoke test
+        run: |
+          python scripts/smoke_pipeline_check.py --stage staging
+
+      - name: Report status
+        if: always()
+        run: echo "Post-training smoke test completed"
