@@ -1,5 +1,8 @@
 name: Deployment
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -13,7 +16,6 @@ on:
         options:
           - canary
           - blue_green
-          - rolling
         default: canary
       canary_percent:
         description: 'Canary traffic percentage (1-100), only for canary strategy'
@@ -30,6 +32,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -40,6 +44,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Pull deployment test data
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        run: |
+          if command -v dvc &> /dev/null; then
+            dvc pull -r origin data/raw/test.csv.dvc || dvc pull -r origin
+          fi
+
+          test -f data/raw/test.csv || (echo "Missing data/raw/test.csv after DVC pull" && exit 1)
 
       - name: Verify production readiness
         id: checks
@@ -63,7 +81,7 @@ jobs:
         run: |
           python scripts/test_model_inference.py \
             --run-id "${{ github.event.inputs.run_id }}" \
-            --test-dataset data/test.csv \
+            --test-dataset data/raw/test.csv \
             --min-accuracy 0.70
 
       - name: Upload pre-deployment report
@@ -83,6 +101,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -93,6 +113,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Pull green-environment test data
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        run: |
+          if command -v dvc &> /dev/null; then
+            dvc pull -r origin data/raw/test.csv.dvc || dvc pull -r origin
+          fi
+
+          test -f data/raw/test.csv || (echo "Missing data/raw/test.csv after DVC pull" && exit 1)
 
       - name: Deploy canary (read config)
         run: |
@@ -164,6 +198,20 @@ jobs:
           path: /tmp/canary_metrics.json
           retention-days: 7
 
+      - name: Persist canary deployment state
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin "${{ github.ref_name }}"
+          git add experiments/registry
+          if git diff --cached --quiet; then
+            echo "No canary deployment changes to commit"
+          else
+            git commit -m "ci: record canary deployment for ${{ github.event.inputs.run_id }}"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
+
   blue-green-deployment:
     needs: pre-deployment-checks
     if: |
@@ -174,11 +222,32 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Pull blue-green test data
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        run: |
+          if command -v dvc &> /dev/null; then
+            dvc pull -r origin data/raw/test.csv.dvc || dvc pull -r origin
+          fi
+
+          test -f data/raw/test.csv || (echo "Missing data/raw/test.csv after DVC pull" && exit 1)
 
       - name: Deploy to green environment
         run: |
@@ -200,7 +269,7 @@ jobs:
         run: |
           python scripts/test_model_inference.py \
             --run-id "${{ github.event.inputs.run_id }}" \
-            --test-dataset data/test.csv \
+            --test-dataset data/raw/test.csv \
             --min-accuracy 0.70
 
       - name: Switch traffic to green
@@ -229,16 +298,33 @@ jobs:
               json.dump(config, f, indent=2)
           "
 
+      - name: Persist blue-green deployment state
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin "${{ github.ref_name }}"
+          git add experiments/registry
+          if git diff --cached --quiet; then
+            echo "No blue-green deployment changes to commit"
+          else
+            git commit -m "ci: record blue-green deployment for ${{ github.event.inputs.run_id }}"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
+
   post-deployment:
-    needs: [pre-deployment-checks]
+    needs: [pre-deployment-checks, canary-deployment, blue-green-deployment]
     if: |
       always() &&
-      needs.pre-deployment-checks.outputs.deployment_approved == 'true'
+      needs.pre-deployment-checks.outputs.deployment_approved == 'true' &&
+      (needs.canary-deployment.result == 'success' || needs.blue-green-deployment.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -262,3 +348,16 @@ jobs:
 
       - name: Notify channels
         run: echo "Deployment notification can integrate with Slack/PagerDuty"
+
+      - name: Persist production tracker
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin "${{ github.ref_name }}"
+          git add experiments/registry/production_tracker.json
+          if git diff --cached --quiet; then
+            echo "No production tracker changes to commit"
+          else
+            git commit -m "ci: update production tracker for ${{ github.event.inputs.run_id }}"
+            git push origin HEAD:${{ github.ref_name }}
+          fi

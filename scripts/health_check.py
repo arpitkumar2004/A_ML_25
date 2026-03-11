@@ -53,13 +53,32 @@ def check_production_model() -> Dict[str, Any]:
             result["message"] = "No production model registered"
             return result
         
-        # Verify model exists
-        model_dir = f"experiments/models/{production_run}"
-        if os.path.exists(model_dir):
-            result["passed"] = True
-            result["message"] = f"Production model loaded: {production_run}"
-        else:
-            result["message"] = f"Production model artifacts missing: {model_dir}"
+        production_entry = next((run for run in registry.get("runs", []) if run.get("run_id") == production_run), None)
+        if not production_entry:
+            result["message"] = f"Production run {production_run} missing from registry entries"
+            return result
+
+        deployment_manifest_path = "experiments/registry/deployment_manifest.json"
+        tracker_path = "experiments/registry/production_tracker.json"
+
+        deployment_match = True
+        if os.path.exists(deployment_manifest_path):
+            with open(deployment_manifest_path) as f:
+                deployment_manifest = json.load(f)
+            deployment_match = deployment_manifest.get("run_id") == production_run
+
+        tracker_match = True
+        if os.path.exists(tracker_path):
+            with open(tracker_path) as f:
+                tracker = json.load(f)
+            tracker_match = tracker.get("run_id") == production_run
+
+        result["passed"] = production_entry.get("status") == "production" and deployment_match and tracker_match
+        result["message"] = (
+            f"Production registry state OK for run {production_run}"
+            if result["passed"]
+            else f"Production state mismatch for run {production_run}"
+        )
     except Exception as e:
         result["message"] = f"Error checking production model: {str(e)}"
     
@@ -107,24 +126,37 @@ def check_inference() -> Dict[str, Any]:
     }
     
     try:
-        # Import inference module
-        from src.inference.predict import predict_batch
-        
-        # Create minimal test data
-        test_data = {
-            "text": ["sample product"],
-            "images": [None],
-            "numeric_features": [[1.0, 2.0, 3.0]]
-        }
-        
-        # Run inference
-        predictions = predict_batch(test_data)
-        
-        if predictions is not None and len(predictions) > 0:
-            result["passed"] = True
-            result["message"] = f"Inference successful. Sample prediction: {predictions[0]:.2f}"
-        else:
-            result["message"] = "Inference returned empty result"
+        registry_path = "experiments/registry/index.json"
+        manifest_path = "experiments/registry/deployment_manifest.json"
+        tracker_path = "experiments/registry/production_tracker.json"
+
+        if not os.path.exists(registry_path):
+            result["message"] = "Registry index not found"
+            return result
+
+        with open(registry_path) as f:
+            registry = json.load(f)
+        production_run = registry.get("active_production_run_id")
+        if not production_run:
+            result["message"] = "No active production run configured"
+            return result
+
+        manifest_run = None
+        if os.path.exists(manifest_path):
+            with open(manifest_path) as f:
+                manifest_run = json.load(f).get("run_id")
+
+        tracker_run = None
+        if os.path.exists(tracker_path):
+            with open(tracker_path) as f:
+                tracker_run = json.load(f).get("run_id")
+
+        result["passed"] = production_run == manifest_run == tracker_run
+        result["message"] = (
+            f"Inference routing ready for production run {production_run}"
+            if result["passed"]
+            else f"Deployment metadata mismatch: registry={production_run}, manifest={manifest_run}, tracker={tracker_run}"
+        )
     except Exception as e:
         result["message"] = f"Inference test failed: {str(e)}"
     

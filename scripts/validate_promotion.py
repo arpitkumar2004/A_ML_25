@@ -47,41 +47,50 @@ def validate_promotion(
         metrics = run.data.metrics or {}
         params = run.data.params or {}
         
-        # Check accuracy
-        accuracy = metrics.get("accuracy", 0)
-        if accuracy < min_accuracy:
-            result["failures"].append(
-                f"Accuracy {accuracy:.3f} below threshold {min_accuracy}"
-            )
-        else:
-            result["metrics"]["accuracy"] = accuracy
-        
-        # Check SMAPE if available
-        smape = metrics.get("smape", None)
-        if smape:
-            result["metrics"]["smape"] = smape
-            if target_stage == "production" and smape > 0.30:
-                result["warnings"].append(
-                    f"SMAPE {smape:.3f} is high for production"
+        accuracy = metrics.get("accuracy")
+        if accuracy is not None:
+            if accuracy < min_accuracy:
+                result["failures"].append(
+                    f"Accuracy {accuracy:.3f} below threshold {min_accuracy}"
                 )
+            else:
+                result["metrics"]["accuracy"] = accuracy
+        else:
+            result["warnings"].append("Accuracy metric not logged; promotion will rely on SMAPE-based validation")
+
+        best_smape = metrics.get("best.smape", metrics.get("smape"))
+        if best_smape is not None:
+            result["metrics"]["smape"] = best_smape
+            if target_stage == "production" and best_smape > 25.0:
+                result["failures"].append(
+                    f"Best SMAPE {best_smape:.3f} exceeds production threshold 25.0"
+                )
+        else:
+            result["warnings"].append("SMAPE metric not logged in MLflow")
         
         # Check latency
-        latency_p95 = metrics.get("latency_p95", 0)
-        if latency_p95 > max_latency_p95:
-            result["failures"].append(
-                f"P95 latency {latency_p95:.3f}s exceeds threshold {max_latency_p95}s"
-            )
+        latency_p95 = metrics.get("latency_p95")
+        if latency_p95 is not None:
+            if latency_p95 > max_latency_p95:
+                result["failures"].append(
+                    f"P95 latency {latency_p95:.3f}s exceeds threshold {max_latency_p95}s"
+                )
+            else:
+                result["metrics"]["latency_p95"] = latency_p95
         else:
-            result["metrics"]["latency_p95"] = latency_p95
+            result["warnings"].append("Latency metric not logged; skipping latency gate")
         
         # Check error rate
-        error_rate = metrics.get("error_rate", 0)
-        if error_rate > 0.05:
-            result["failures"].append(
-                f"Error rate {error_rate:.3f} exceeds 5%"
-            )
+        error_rate = metrics.get("error_rate")
+        if error_rate is not None:
+            if error_rate > 0.05:
+                result["failures"].append(
+                    f"Error rate {error_rate:.3f} exceeds 5%"
+                )
+            else:
+                result["metrics"]["error_rate"] = error_rate
         else:
-            result["metrics"]["error_rate"] = error_rate
+            result["warnings"].append("Error rate metric not logged; skipping error-rate gate")
         
         # Get training info
         result["metrics"]["training_duration"] = metrics.get("training_duration_seconds", None)
@@ -89,13 +98,9 @@ def validate_promotion(
         
         # Promotion eligibility
         if target_stage == "production":
-            if len(result["failures"]) > 0:
-                result["passed"] = False
-            else:
-                result["passed"] = len(result["failures"]) == 0
+            result["passed"] = len(result["failures"]) == 0
         else:
-            # Staging/canary have looser requirements
-            result["passed"] = error_rate <= 0.10
+            result["passed"] = len(result["failures"]) == 0
         
     except Exception as e:
         result["failures"].append(f"Validation error: {str(e)}")

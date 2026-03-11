@@ -1,5 +1,8 @@
 name: Model Promotion
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -25,6 +28,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -83,6 +88,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -101,6 +108,22 @@ jobs:
             --target-stage "${{ github.event.inputs.target_stage }}" \
             --promoted-by "${{ github.actor }}" \
             --promotion-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Persist promotion state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin "${{ github.ref_name }}"
+          git add experiments/registry
+          if [[ -f "experiments/models/${{ github.event.inputs.run_id }}/manifest.json" ]]; then
+            git add "experiments/models/${{ github.event.inputs.run_id }}/manifest.json"
+          fi
+          if git diff --cached --quiet; then
+            echo "No promotion state changes to commit"
+          else
+            git commit -m "ci: promote model ${{ github.event.inputs.run_id }} to ${{ github.event.inputs.target_stage }}"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
 
       - name: Tag git commit
         run: |
@@ -134,6 +157,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -152,6 +177,20 @@ jobs:
             --run-id "${{ github.event.inputs.run_id }}" \
             --stage "${{ github.event.inputs.target_stage }}" \
             --manifest-path experiments/registry/deployment_manifest.json
+
+      - name: Persist deployment manifest
+        if: github.event.inputs.target_stage == 'production'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin "${{ github.ref_name }}"
+          git add experiments/registry/deployment_manifest.json
+          if git diff --cached --quiet; then
+            echo "No deployment manifest changes to commit"
+          else
+            git commit -m "ci: update deployment manifest for ${{ github.event.inputs.run_id }}"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
 
       - name: Notify deployment system
         if: github.event.inputs.target_stage == 'production'

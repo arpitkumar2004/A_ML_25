@@ -1,5 +1,8 @@
 name: Training Pipeline
 
+permissions:
+  contents: write
+
 on:
   schedule:
     # Run daily retraining at 22:00 UTC (adjust to your preferred time)
@@ -28,6 +31,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.ref_name }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -44,8 +48,16 @@ jobs:
         run: |
           # Force retrain flag overrides drift check
           if [[ "${{ github.event.inputs.force_retrain }}" == "true" ]]; then
+            printf '{"drift_detected": true, "reason": "Force retrain requested via workflow_dispatch"}\n' > /tmp/drift_check.json
             echo "should_train=true" >> $GITHUB_OUTPUT
             echo "reason=Force retrain requested via workflow_dispatch" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if [[ ! -f experiments/registry/baseline_stats.json ]]; then
+            printf '{"drift_detected": true, "reason": "Bootstrap training required because baseline stats are missing"}\n' > /tmp/drift_check.json
+            echo "should_train=true" >> $GITHUB_OUTPUT
+            echo "reason=Bootstrap training required because baseline stats are missing" >> $GITHUB_OUTPUT
             exit 0
           fi
           
@@ -82,6 +94,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.ref_name }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -102,11 +115,27 @@ jobs:
           pip install -r requirements.txt
 
       - name: Download training data
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
         run: |
-          # Use DVC pull if available (requires credentials)
           if command -v dvc &> /dev/null; then
-            dvc pull -r origin data/raw/ 2>/dev/null || true
+            dvc pull -r origin data/raw/train.csv.dvc data/raw/test.csv.dvc || dvc pull -r origin
           fi
+
+          test -f data/raw/train.csv || (echo "Missing data/raw/train.csv after DVC pull" && exit 1)
+          test -f data/raw/test.csv || (echo "Missing data/raw/test.csv after DVC pull" && exit 1)
+
+      - name: Prepare training dataset
+        run: |
+          if [[ ! -f data/interim/train_prepared.csv ]]; then
+            python scripts/prepare_training_data.py --input data/raw/train.csv --output data/interim/train_prepared.csv
+          fi
+
+          test -f data/interim/train_prepared.csv || (echo "Missing data/interim/train_prepared.csv" && exit 1)
 
       - name: Run training pipeline
         id: train
@@ -114,34 +143,50 @@ jobs:
           MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
           MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
           MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+          DAGSHUB_MLFLOW_ENABLED: 'true'
           MLFLOW_ENABLED: 'true'
         run: |
           CONFIG="${{ github.event.inputs.model_config || 'configs/training/final_train.yaml' }}"
           echo "Training with config: $CONFIG"
           
-          # Run training
-          python main.py train \
-            --config "$CONFIG" \
-            --output-dir experiments/training_runs/$(date +%Y%m%d_%H%M%S)
-          
-          # Capture run_id from MLflow
-          RUN_ID=$(python -c "
-          import mlflow
-          mlflow.set_tracking_uri('${{ secrets.MLFLOW_TRACKING_URI }}')
-          experiments = mlflow.search_experiments(order_by=['creation_time DESC'], max_results=1)
-          if experiments:
-              runs = mlflow.search_runs(experiment_ids=[experiments[0].experiment_id], order_by=['start_time DESC'], max_results=1)
-              if runs:
-                  print(runs[0].run_id)
-          ")
+          python main.py train --config "$CONFIG"
+
+          python -c "
+          import json
+          idx = json.load(open('experiments/registry/index.json', encoding='utf-8'))
+          train_runs = [r for r in idx.get('runs', []) if r.get('stage') == 'train']
+          if not train_runs:
+              raise SystemExit('No train runs were recorded in experiments/registry/index.json')
+          latest = max(train_runs, key=lambda item: item.get('updated_utc') or item.get('created_utc') or '')
+          manifest = json.load(open(latest['manifest_path'], encoding='utf-8'))
+          payload = {
+              'local_run_id': latest['run_id'],
+              'manifest_path': latest['manifest_path'],
+              'mlflow_run_id': manifest.get('outputs', {}).get('mlflow', {}).get('mlflow_run_id', '')
+          }
+          json.dump(payload, open('/tmp/training_outputs.json', 'w', encoding='utf-8'), indent=2)
+          print(json.dumps(payload, indent=2))
+          "
+
+          RUN_ID=$(python -c "import json; print(json.load(open('/tmp/training_outputs.json', encoding='utf-8'))['mlflow_run_id'])")
+          LOCAL_RUN_ID=$(python -c "import json; print(json.load(open('/tmp/training_outputs.json', encoding='utf-8'))['local_run_id'])")
+          MANIFEST_PATH=$(python -c "import json; print(json.load(open('/tmp/training_outputs.json', encoding='utf-8'))['manifest_path'])")
+
+          test -n "$RUN_ID" || (echo "Training completed but no MLflow run ID was recorded" && exit 1)
+
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "local_run_id=$LOCAL_RUN_ID" >> $GITHUB_OUTPUT
+          echo "manifest_path=$MANIFEST_PATH" >> $GITHUB_OUTPUT
 
       - name: Validate model performance
         id: validate
         run: |
           python scripts/validate_training.py \
+            --manifest-path "${{ steps.train.outputs.manifest_path }}" \
             --min-smape-improvement 0.02 \
-            --max-train-time 3600 \
+            --max-train-time 7200 \
             --output /tmp/validation.json && echo "validation_passed=true" >> $GITHUB_OUTPUT || echo "validation_passed=false" >> $GITHUB_OUTPUT
 
       - name: Register trained model
@@ -152,14 +197,33 @@ jobs:
             --stage "staging" \
             --tags "automated_training=true,drift_reason=${{ needs.drift-check.outputs.drift_reason }}"
 
+      - name: Persist registry state
+        if: steps.validate.outputs.validation_passed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin "${{ github.ref_name }}"
+          git add experiments/registry
+          if [[ -f "experiments/models/${{ steps.train.outputs.run_id }}/manifest.json" ]]; then
+            git add "experiments/models/${{ steps.train.outputs.run_id }}/manifest.json"
+          fi
+          if git diff --cached --quiet; then
+            echo "No registry changes to commit"
+          else
+            git commit -m "ci: register training run ${{ steps.train.outputs.run_id }}"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
+
       - name: Upload training artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: training-artifacts
           path: |
-            experiments/training_runs/*/
+            experiments/registry/
+            experiments/reports/
             /tmp/validation.json
+            /tmp/training_outputs.json
           retention-days: 30
 
       - name: Notify on failure
@@ -176,6 +240,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -187,9 +253,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Pull smoke-test data
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        run: |
+          if command -v dvc &> /dev/null; then
+            dvc pull -r origin data/raw/train.csv.dvc data/raw/test.csv.dvc || dvc pull -r origin
+          fi
+
       - name: Run inference smoke test
         run: |
-          python scripts/smoke_pipeline_check.py --stage staging
+          python scripts/smoke_pipeline_check.py
 
       - name: Report status
         if: always()
