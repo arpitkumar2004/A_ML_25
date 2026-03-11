@@ -2,6 +2,7 @@ import argparse
 import yaml
 import os
 import sys
+import subprocess
 from src.utils.logging_utils import get_logger
 from src.utils.seed_everything import seed_everything
 from src.utils.config_schema import validate_config_for_command, flatten_train_config
@@ -70,6 +71,15 @@ def main():
     logger.info(f"Starting pipeline: {args.command}")
 
     if args.command == "train":
+        # Pull data from DVC remote before training
+        logger.info("Pulling data from DVC remote...")
+        try:
+            subprocess.run(["dvc", "pull"], check=True, cwd=os.getcwd())
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"DVC pull failed or data already present: {e}")
+        except FileNotFoundError:
+            logger.warning("DVC not found, skipping pull. Ensure data/raw/*.csv files exist locally.")
+        
         from src.pipelines.train_pipeline import run_train_pipeline
         config = load_config(args.config)
         validate_config_for_command("train", config)
