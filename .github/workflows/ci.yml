@@ -30,12 +30,16 @@ jobs:
         run: python -m compileall src main.py
 
       - name: Unit tests gate
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: pytest -q ci_cd/tests
 
       - name: Repo hygiene gate
         run: python scripts/check_repo_hygiene.py
 
       - name: CLI smoke gate
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: python main.py --help
 # # write code to .github/workflows/ci.yml
 # name: CI

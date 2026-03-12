@@ -13,8 +13,9 @@ import os
 class BertRegressor(BaseModel):
     def __init__(self, pretrained_model_name='bert-base-uncased', random_seed=42):
         super().__init__()
-        self.tokenizer = BertTokenizer.from_pretrained(pretrained_model_name)
-        self.bert = BertModel.from_pretrained(pretrained_model_name)
+        _hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN") or None
+        self.tokenizer = BertTokenizer.from_pretrained(pretrained_model_name, token=_hf_token)
+        self.bert = BertModel.from_pretrained(pretrained_model_name, token=_hf_token)
         self.regressor = LinearRegression()
         self.random_seed = random_seed
         seed_everything(self.random_seed)

@@ -16,6 +16,11 @@ try:
 except Exception:
     dagshub = None
 
+try:
+    from mlflow.entities import ViewType  # type: ignore
+except Exception:
+    ViewType = None
+
 
 def _to_bool(value: Any, default: bool = False) -> bool:
     if value is None:
@@ -110,16 +115,54 @@ class MLflowTracker:
             return False
 
         dagshub_token = os.getenv("DAGSHUB_TOKEN", "").strip()
-        if dagshub_token:
-            os.environ["DAGSHUB_TOKEN"] = dagshub_token
+        dagshub_username = os.getenv("DAGSHUB_USERNAME", "").strip()
+        if (not dagshub_token) or (not dagshub_username):
+            logger.warning("DagsHub tracking enabled but DAGSHUB_USERNAME/TOKEN is missing; using regular MLflow tracking.")
+            return False
 
+        # Directly configure the DagsHub MLflow endpoint using HTTP basic auth.
+        # This avoids `dagshub.init()` which triggers an interactive browser OAuth flow in CI.
+        dagshub_mlflow_uri = f"{self.dagshub_host}/{self.dagshub_repo_owner}/{self.dagshub_repo_name}.mlflow"
         try:
-            dagshub.init(repo_owner=self.dagshub_repo_owner, repo_name=self.dagshub_repo_name, mlflow=True)
+            assert mlflow is not None
+            os.environ["MLFLOW_TRACKING_USERNAME"] = dagshub_username
+            os.environ["MLFLOW_TRACKING_PASSWORD"] = dagshub_token
+            mlflow.set_tracking_uri(dagshub_mlflow_uri)
+            self.tracking_uri = dagshub_mlflow_uri
             self.tracking_backend = "dagshub"
+            logger.info("DagsHub MLflow tracking configured: %s", dagshub_mlflow_uri)
             return True
         except Exception as exc:
-            logger.warning("DagsHub init failed: %s. Using regular MLflow tracking.", exc)
+            logger.warning("DagsHub MLflow setup failed: %s. Using regular MLflow tracking.", exc)
             return False
+
+    def _set_or_restore_experiment(self) -> None:
+        assert mlflow is not None
+        try:
+            mlflow.set_experiment(self.experiment_name)
+            return
+        except Exception as exc:
+            message = str(exc)
+            if "deleted experiment" not in message.lower():
+                raise
+            logger.warning("Experiment '%s' is deleted; attempting restore.", self.experiment_name)
+
+        if ViewType is None:
+            raise RuntimeError(
+                f"Experiment '{self.experiment_name}' is deleted and MLflow ViewType is unavailable for restore."
+            )
+
+        client = mlflow.tracking.MlflowClient()
+        deleted = client.search_experiments(view_type=ViewType.DELETED_ONLY)
+        target = next((exp for exp in deleted if exp.name == self.experiment_name), None)
+        if target is None:
+            raise RuntimeError(
+                f"Experiment '{self.experiment_name}' is deleted and could not be located for restore."
+            )
+
+        client.restore_experiment(target.experiment_id)
+        mlflow.set_experiment(self.experiment_name)
+        logger.info("Restored and activated deleted MLflow experiment '%s'.", self.experiment_name)
 
     def start(self) -> None:
         if not self.enabled:
@@ -137,7 +180,7 @@ class MLflowTracker:
             if isinstance(resolved_uri, str) and resolved_uri:
                 self.tracking_uri = resolved_uri
 
-            mlflow.set_experiment(self.experiment_name)
+            self._set_or_restore_experiment()
             run = mlflow.start_run(
                 run_name=self.run_name,
                 tags={

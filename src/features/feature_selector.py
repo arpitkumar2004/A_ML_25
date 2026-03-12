@@ -34,7 +34,14 @@ class FeatureSelector:
     def _effective_k(self, n_features: int) -> int:
         if n_features <= 0:
             return 0
-        return max(self.min_features, min(self.k, n_features))
+        k_eff = max(self.min_features, min(self.k, n_features))
+        if k_eff >= n_features:
+            logger.warning(
+                "Feature selection k=%d >= n_features=%d: no features will be dropped. "
+                "Lower k in selector_cfg to below %d to enable actual filtering.",
+                self.k, n_features, n_features,
+            )
+        return k_eff
 
     def _save(self) -> None:
         payload = {

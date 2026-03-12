@@ -126,6 +126,10 @@ jobs:
           DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
           DAGSHUB_MLFLOW_ENABLED: 'true'
           MLFLOW_ENABLED: 'true'
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
         run: |
           CONFIG="${{ github.event.inputs.model_config || 'configs/training/final_train.yaml' }}"
           echo "Training with config: $CONFIG"
@@ -149,11 +153,15 @@ jobs:
           print(json.dumps(payload, indent=2))
           "
 
-          RUN_ID=$(python -c "import json; print(json.load(open('/tmp/training_outputs.json', encoding='utf-8'))['mlflow_run_id'])")
+          RUN_ID=$(python -c "import json; v=json.load(open('/tmp/training_outputs.json', encoding='utf-8')).get('mlflow_run_id'); print('' if v is None else str(v))")
           LOCAL_RUN_ID=$(python -c "import json; print(json.load(open('/tmp/training_outputs.json', encoding='utf-8'))['local_run_id'])")
           MANIFEST_PATH=$(python -c "import json; print(json.load(open('/tmp/training_outputs.json', encoding='utf-8'))['manifest_path'])")
 
-          test -n "$RUN_ID" || (echo "Training completed but no MLflow run ID was recorded" && exit 1)
+          if [[ -z "$RUN_ID" || "$RUN_ID" == "None" || "$RUN_ID" == "null" ]]; then
+            echo "Training completed but no valid MLflow run ID was recorded"
+            cat /tmp/training_outputs.json
+            exit 1
+          fi
 
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
           echo "local_run_id=$LOCAL_RUN_ID" >> $GITHUB_OUTPUT

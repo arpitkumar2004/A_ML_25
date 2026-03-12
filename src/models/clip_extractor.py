@@ -12,8 +12,9 @@ import os
 # Load model on GPU (if available)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_NAME = "openai/clip-vit-base-patch32"
-clip_model = CLIPModel.from_pretrained(MODEL_NAME).to(device)
-clip_processor = CLIPProcessor.from_pretrained(MODEL_NAME)
+_hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN") or None
+clip_model = CLIPModel.from_pretrained(MODEL_NAME, token=_hf_token).to(device)
+clip_processor = CLIPProcessor.from_pretrained(MODEL_NAME, token=_hf_token)
 clip_model.eval()
 
 class ClipExtractor:

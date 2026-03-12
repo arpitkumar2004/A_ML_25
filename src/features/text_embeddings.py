@@ -88,7 +88,11 @@ class TextEmbedder:
         if SentenceTransformer is None:
             raise ImportError("sentence-transformers not installed. Install to use 'sbert' method.")
         if self._model is None:
-            self._model = SentenceTransformer(self.model_name)
+            _hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
+            if _hf_token:
+                os.environ.setdefault("HF_TOKEN", _hf_token)
+                os.environ.setdefault("HUGGING_FACE_HUB_TOKEN", _hf_token)
+            self._model = SentenceTransformer(self.model_name, token=_hf_token or None)
             logger.info(f"Loaded SentenceTransformer: {self.model_name}")
 
     def _init_tfidf(self, sample_texts: Iterable[str]):
@@ -211,7 +215,8 @@ def embeded_text_features(df):
         # Sentence Embeddings (SBERT or fallback)
         try:
             from sentence_transformers import SentenceTransformer
-            sbert_model = SentenceTransformer('all-MiniLM-L6-v2')
+            _hf_tok = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
+            sbert_model = SentenceTransformer('all-MiniLM-L6-v2', token=_hf_tok or None)
             X_embed = sbert_model.encode(df[text_col].tolist(), show_progress_bar=False)
             embedding_method = "sentence-transformer"
         except Exception as e:
@@ -288,8 +293,8 @@ def build_text_embeddings(df, text_columns=None):
         # Try SentenceTransformer, else fallback to random vectors
         try:
             from sentence_transformers import SentenceTransformer
-
-            model = SentenceTransformer("all-MiniLM-L6-v2")
+            _hf_tok = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
+            model = SentenceTransformer("all-MiniLM-L6-v2", token=_hf_tok or None)
             X_embed = model.encode(df[text_col].tolist(), show_progress_bar=False)
         except Exception:
             print("⚠️ SBERT not found, using random fallback embeddings (300-dim).")

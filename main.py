@@ -71,14 +71,19 @@ def main():
     logger.info(f"Starting pipeline: {args.command}")
 
     if args.command == "train":
-        # Pull data from DVC remote before training
-        logger.info("Pulling data from DVC remote...")
-        try:
-            subprocess.run(["dvc", "pull"], check=True, cwd=os.getcwd())
-        except subprocess.CalledProcessError as e:
-            logger.warning(f"DVC pull failed or data already present: {e}")
-        except FileNotFoundError:
-            logger.warning("DVC not found, skipping pull. Ensure data/raw/*.csv files exist locally.")
+        # Pull data from DVC remote only if raw files are missing (CI pulls them beforehand)
+        raw_train = os.path.join(os.getcwd(), "data", "raw", "train.csv")
+        raw_test  = os.path.join(os.getcwd(), "data", "raw", "test.csv")
+        if not os.path.exists(raw_train) or not os.path.exists(raw_test):
+            logger.info("Pulling data from DVC remote...")
+            try:
+                subprocess.run(["dvc", "pull"], check=True, cwd=os.getcwd())
+            except subprocess.CalledProcessError as e:
+                logger.warning(f"DVC pull failed or data already present: {e}")
+            except FileNotFoundError:
+                logger.warning("DVC not found, skipping pull. Ensure data/raw/*.csv files exist locally.")
+        else:
+            logger.info("Raw data already present, skipping DVC pull.")
         
         from src.pipelines.train_pipeline import run_train_pipeline
         config = load_config(args.config)

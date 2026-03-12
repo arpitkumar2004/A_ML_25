@@ -62,10 +62,15 @@ class ImageEmbedder:
                 pass
 
             try:
+                _hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
+                if _hf_token:
+                    os.environ.setdefault("HF_TOKEN", _hf_token)
+                    os.environ.setdefault("HUGGING_FACE_HUB_TOKEN", _hf_token)
+
                 from transformers import CLIPModel, CLIPProcessor
 
-                model = CLIPModel.from_pretrained(self.model_name).to(self.device)
-                processor = CLIPProcessor.from_pretrained(self.model_name)
+                model = CLIPModel.from_pretrained(self.model_name, token=_hf_token or None).to(self.device)
+                processor = CLIPProcessor.from_pretrained(self.model_name, token=_hf_token or None)
                 model.eval()
                 self._backend = "hf"
                 self._model = model
@@ -118,24 +123,42 @@ class ImageEmbedder:
         }
         return stable_hash(payload)
 
-    def _load_image(self, path_or_url: str):
+    _HTTP_HEADERS = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+    }
+
+    def _load_image(self, path_or_url: str, _retries: int = 2, _backoff: float = 1.0):
+        """Load an image from a URL or local path.  Returns None on permanent failure
+        so the caller can zero-out the embedding rather than embed a white placeholder."""
         from PIL import Image
+        import time
 
-        try:
-            if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
-                import requests
-                from io import BytesIO
+        if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
+            import requests
+            from io import BytesIO
 
-                r = requests.get(path_or_url, timeout=10)
-                return Image.open(BytesIO(r.content)).convert("RGB")
+            last_exc: Exception = RuntimeError("no attempts made")
+            for attempt in range(_retries):
+                try:
+                    r = requests.get(path_or_url, timeout=10, headers=self._HTTP_HEADERS)
+                    r.raise_for_status()
+                    return Image.open(BytesIO(r.content)).convert("RGB")
+                except Exception as exc:
+                    last_exc = exc
+                    if attempt < _retries - 1:
+                        time.sleep(_backoff)
+            logger.warning(f"Failed to load image '{path_or_url}' after {_retries} attempts: {last_exc}")
+            return None
 
-            if path_or_url and os.path.exists(path_or_url):
+        if path_or_url and os.path.exists(path_or_url):
+            try:
                 return Image.open(path_or_url).convert("RGB")
+            except Exception as exc:
+                logger.warning(f"Failed to load image '{path_or_url}': {exc}")
+                return None
 
-        except Exception as exc:
-            logger.warning(f"Failed to load image '{path_or_url}': {exc}")
-
-        return Image.new("RGB", (224, 224), color=(255, 255, 255))
+        return None
 
     def embed(self, image_paths: Iterable[str], use_cache: bool = True, fingerprint: Optional[str] = None):
         paths = list(image_paths)
@@ -153,10 +176,22 @@ class ImageEmbedder:
 
         import torch
 
+        from PIL import Image as _PILImage
+
         outputs: List[np.ndarray] = []
+        n_failed = 0
         for start in range(0, n, self.batch_size):
             batch_paths = paths[start : start + self.batch_size]
-            imgs = [self._load_image(p) for p in batch_paths]
+            imgs_raw = [self._load_image(p) for p in batch_paths]
+            # Track which rows failed; replace None with a black placeholder purely
+            # for batch-processing shape compatibility — their embeddings will be
+            # zeroed out afterwards so they contribute no signal.
+            failed_mask = [img is None for img in imgs_raw]
+            imgs = [
+                img if img is not None else _PILImage.new("RGB", (224, 224), color=(0, 0, 0))
+                for img in imgs_raw
+            ]
+            n_failed += sum(failed_mask)
 
             if self._backend == "openai":
                 x = torch.stack([self._preprocess(img).to(self.device) for img in imgs])
@@ -178,7 +213,16 @@ class ImageEmbedder:
                         raise TypeError(f"Unsupported HF CLIP output type: {type(raw)}")
 
             norm = np.linalg.norm(y, axis=1, keepdims=True) + 1e-12
-            outputs.append(y / norm)
+            y_normed = y / norm
+            # Zero out rows where the image failed to load so they carry no signal
+            # (a white/black placeholder embedding is a constant artefact, not missing data)
+            for i, failed in enumerate(failed_mask):
+                if failed:
+                    y_normed[i] = 0.0
+            outputs.append(y_normed)
+
+        if n_failed:
+            logger.info("Image loading: %d/%d rows have zero embeddings due to load failures.", n_failed, n)
 
         emb = np.vstack(outputs) if outputs else np.zeros((n, self.fallback_dim), dtype=np.float32)
         self._save_cache(emb, fp)

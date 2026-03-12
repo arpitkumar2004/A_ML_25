@@ -18,7 +18,7 @@ training:
   selector_cfg:
     enabled: true
     method: "f_regression"
-    k: 2048
+    k: 512
     min_features: 128
     save_path: "data/processed/feature_selector.joblib"
     random_state: 42
