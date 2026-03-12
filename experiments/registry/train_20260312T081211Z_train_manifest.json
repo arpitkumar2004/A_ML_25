@@ -1,0 +1,130 @@
+{
+  "run_id": "train_20260312T081211Z",
+  "stage": "train",
+  "created_utc": "2026-03-12T08:13:31.853654+00:00",
+  "reproducibility": {
+    "config_sha256": "580c2969ea0d7cfb7074aa40ad8d600f0cc8643442447ed0cfaeb465997ac498",
+    "pythonhashseed": "",
+    "seed": 42
+  },
+  "config": {
+    "run_full_training": true,
+    "data_path": "data/interim/train_prepared.csv",
+    "sample_frac": 0.001,
+    "target_col": "price",
+    "text_col": "catalog_content",
+    "image_col": "image_link",
+    "id_col": "sample_id",
+    "models": [
+      "Linear",
+      "RF",
+      "LGBM",
+      "XGB",
+      "CatBoost"
+    ],
+    "feature_cache": "data/processed/features.joblib",
+    "dim_cache": "data/processed/dimred.joblib",
+    "use_dim_cache": true,
+    "registry_dir": "experiments/registry",
+    "selector_cfg": {
+      "enabled": true,
+      "method": "f_regression",
+      "k": 512,
+      "min_features": 128,
+      "save_path": "data/processed/feature_selector.joblib",
+      "random_state": 42
+    },
+    "post_log_cfg": {
+      "enabled": true,
+      "alpha": 0.01,
+      "min_skew": 1.0,
+      "min_samples": 30,
+      "max_test_rows": 50000,
+      "save_path": "data/processed/post_feature_log_transform.joblib",
+      "random_state": 42
+    },
+    "trainer": {
+      "n_splits": 5,
+      "random_state": 42
+    },
+    "stacker": {
+      "run_stacker": true,
+      "method": "ridge",
+      "n_splits": 5,
+      "params": {
+        "alpha": 1.0
+      }
+    },
+    "quality_gates": {
+      "max_smape": 25.0,
+      "max_p95_latency_seconds": 5.0,
+      "max_critical_drift_features": 0
+    },
+    "mlflow": {
+      "enabled": true,
+      "tracking_uri": "",
+      "experiment_name": "A_ML_25-train",
+      "model_registry": {
+        "enabled": true,
+        "name": "A_ML_25-train-model"
+      },
+      "dagshub": {
+        "enabled": true,
+        "repo_owner": "arpitkumar2004",
+        "repo_name": "A_ML_25",
+        "host": "https://dagshub.com"
+      }
+    },
+    "n_splits": 5,
+    "random_state": 42,
+    "stratify": false,
+    "run_stacker": true,
+    "stacker_method": "ridge",
+    "stacker_n_splits": 5,
+    "stacker_params": {
+      "alpha": 1.0
+    },
+    "target_transform": "log1p",
+    "target_skew_meta": {
+      "applied": true,
+      "p_value": 3.418981581426957e-06,
+      "skew": 1.5827306000290415,
+      "alpha": 0.01,
+      "min_skew": 1.0,
+      "method": "skewtest+log1p",
+      "tested_rows": 75
+    }
+  },
+  "outputs": {
+    "model_report": "experiments/reports/model_comparison.csv",
+    "oof_path": "experiments/oof/oof_matrix.joblib",
+    "dim_cache": "data/processed/dimred.joblib",
+    "feature_cache": "data/processed/features.joblib",
+    "selector_path": "data/processed/feature_selector.joblib",
+    "numeric_scaler_path": "data/processed/numeric_scaler.joblib",
+    "stacker_summary": "experiments/reports/stacker_summary.joblib",
+    "mlflow": {
+      "enabled": true,
+      "mlflow_run_id": "1850d2a9557441c28658be5c04a6baf6",
+      "tracking_uri": "https://dagshub.com/arpitkumar2004/A_ML_25.mlflow",
+      "experiment_name": "A_ML_25-train"
+    },
+    "model_registry": {
+      "enabled": true,
+      "registered": true,
+      "registered_model_name": "A_ML_25-train-model",
+      "version": "9",
+      "model_uri": "models:/m-e0ef7999cf7c49d9a4c9d227893c8ef0",
+      "artifact_path": "models/lgbm",
+      "error": ""
+    }
+  },
+  "timings_seconds": {
+    "load_data": 0.7241,
+    "parse_features": 0.0284,
+    "build_features": 34.1548,
+    "dimensionality": 7.7041,
+    "train_and_eval": 36.6398,
+    "total": 80.0201
+  }
+}

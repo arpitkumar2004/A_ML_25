@@ -223,6 +223,35 @@
       },
       "created_utc": "2026-03-09T16:31:55.659336+00:00",
       "updated_utc": "2026-03-09T16:31:55.659336+00:00"
+    },
+    {
+      "run_id": "train_20260312T081211Z",
+      "manifest_path": "experiments/registry/train_20260312T081211Z_train_manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "mlflow": {
+          "enabled": true,
+          "mlflow_run_id": "1850d2a9557441c28658be5c04a6baf6",
+          "tracking_uri": "https://dagshub.com/arpitkumar2004/A_ML_25.mlflow",
+          "experiment_name": "A_ML_25-train"
+        }
+      },
+      "created_utc": "2026-03-12T08:13:31.854402+00:00",
+      "updated_utc": "2026-03-12T08:13:31.854410+00:00"
+    },
+    {
+      "run_id": "1850d2a9557441c28658be5c04a6baf6",
+      "manifest_path": "experiments/models/1850d2a9557441c28658be5c04a6baf6/manifest.json",
+      "stage": "training",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-03-12T08:13:42.009419"
+      },
+      "created_utc": "2026-03-12T08:13:42.009546+00:00",
+      "updated_utc": "2026-03-12T08:13:42.009553+00:00"
     }
   ],
   "active_production_run_id": null
