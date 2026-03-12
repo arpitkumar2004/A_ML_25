@@ -189,7 +189,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin "${{ github.ref_name }}"
+          git pull --rebase --autostash origin "${{ github.ref_name }}"
           git add experiments/registry
           if [[ -f "experiments/models/${{ steps.train.outputs.run_id }}/manifest.json" ]]; then
             git add "experiments/models/${{ steps.train.outputs.run_id }}/manifest.json"
