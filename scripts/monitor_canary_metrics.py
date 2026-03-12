@@ -4,17 +4,24 @@ Monitor canary deployment metrics.
 
 import json
 import os
-import time
 from datetime import datetime
 from typing import Dict, Any
 import argparse
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.validation.slo_validator import SLOValidator
 
 
 def monitor_canary_metrics(
     duration: int = 60,
     sample_size: int = 100,
-    alert_threshold_latency: float = 2.0,
-    alert_threshold_error_rate: float = 0.05
+    alert_threshold_latency: float | None = None,
+    alert_threshold_error_rate: float | None = None
 ) -> Dict[str, Any]:
     """
     Monitor canary deployment for anomalies.
@@ -39,6 +46,10 @@ def monitor_canary_metrics(
     }
     
     try:
+        thresholds = SLOValidator().get_stage_thresholds("canary")
+        latency_threshold = thresholds["max_latency_p95"] if alert_threshold_latency is None else alert_threshold_latency
+        error_rate_threshold = thresholds["max_error_rate"] if alert_threshold_error_rate is None else alert_threshold_error_rate
+
         # Simulate monitoring (in production: use actual request logs)
         # In real system: query Prometheus, DataDog, CloudWatch, etc.
         
@@ -54,15 +65,15 @@ def monitor_canary_metrics(
         }
         
         # Check thresholds
-        if result["metrics"]["p95_latency"] > alert_threshold_latency:
+        if result["metrics"]["p95_latency"] > latency_threshold:
             result["alerts"].append(
-                f"Latency high: {result['metrics']['p95_latency']}s > {alert_threshold_latency}s"
+                f"Latency high: {result['metrics']['p95_latency']}s > {latency_threshold}s"
             )
             result["passed"] = False
         
-        if result["metrics"]["error_rate"] > alert_threshold_error_rate:
+        if result["metrics"]["error_rate"] > error_rate_threshold:
             result["alerts"].append(
-                f"Error rate high: {result['metrics']['error_rate']:.3f} > {alert_threshold_error_rate}"
+                f"Error rate high: {result['metrics']['error_rate']:.3f} > {error_rate_threshold}"
             )
             result["passed"] = False
         
@@ -79,8 +90,8 @@ def main():
     parser = argparse.ArgumentParser(description="Monitor canary deployment")
     parser.add_argument("--duration", type=int, default=60)
     parser.add_argument("--sample-size", type=int, default=100)
-    parser.add_argument("--alert-threshold-latency", type=float, default=2.0)
-    parser.add_argument("--alert-threshold-error-rate", type=float, default=0.05)
+    parser.add_argument("--alert-threshold-latency", type=float, default=None)
+    parser.add_argument("--alert-threshold-error-rate", type=float, default=None)
     parser.add_argument("--output", required=True, help="Output JSON file")
     
     args = parser.parse_args()

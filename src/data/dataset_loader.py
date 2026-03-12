@@ -4,6 +4,7 @@ import pandas as pd
 import os
 from ..utils.io import IO
 from ..utils.logging_utils import LoggerFactory
+from ..utils.column_aliases import missing_required_columns, normalize_to_train_schema
 
 
 class DatasetLoader:
@@ -15,7 +16,7 @@ class DatasetLoader:
     """
     def __init__(self, path: str, required_columns: Optional[list] = None, logger=None):
         self.path = path
-        self.required_columns = required_columns or ["unique_identifier", "Description", "Price"]
+        self.required_columns = required_columns or ["sample_id", "catalog_content", "price"]
         self.logger = logger or LoggerFactory.get("DatasetLoader")
 
     def load(self) -> pd.DataFrame:
@@ -23,7 +24,10 @@ class DatasetLoader:
             self.logger.error(f"File not found: {self.path}")
             raise FileNotFoundError(self.path)
         df = IO.read_csv(self.path)
-        missing = [c for c in self.required_columns if c not in df.columns]
+        df, rename_map = normalize_to_train_schema(df)
+        if rename_map:
+            self.logger.info(f"Normalized input columns: {rename_map}")
+        missing = missing_required_columns(df.columns, self.required_columns)
         if missing:
             self.logger.error(f"Missing columns: {missing}")
             raise ValueError(f"Missing required columns: {missing}")
@@ -40,11 +44,11 @@ class DatasetLoader:
 
 def load_train_df(path: str) -> pd.DataFrame:
     """Backward-compatible helper for loading training data."""
-    loader = DatasetLoader(path=path, required_columns=["unique_identifier", "Description", "Price"])
+    loader = DatasetLoader(path=path, required_columns=["sample_id", "catalog_content", "price"])
     return loader.load()
 
 
 def load_test_df(path: str) -> pd.DataFrame:
     """Backward-compatible helper for loading test/inference data."""
-    loader = DatasetLoader(path=path, required_columns=["unique_identifier", "Description"])
+    loader = DatasetLoader(path=path, required_columns=["sample_id", "catalog_content"])
     return loader.load()

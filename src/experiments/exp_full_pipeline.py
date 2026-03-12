@@ -60,11 +60,11 @@ def run(config: Dict):
     logger.info(f"Data shape after sampling: {df.shape}")
 
     # 1) Parse structured pieces
-    df = Parser.add_parsed_features(df, text_col=config.get("text_col", "Description"))
+    df = Parser.add_parsed_features(df, text_col=config.get("text_col", "catalog_content"))
     logger.info("Parsed textual numeric/unit features")
 
     # 2) Prepare target and build features (text + image + numeric)
-    y = df[config.get("target_col", "Price")].values.astype(float)
+    y = df[config.get("target_col", "price")].values.astype(float)
     feature_builder = FeatureBuilder(
         text_cfg=config.get("text_cfg", {"method":"sbert", "cache_path":"data/processed/text_embeddings.joblib"}),
         image_cfg=config.get("image_cfg", {"cache_path":"data/processed/image_embeddings.joblib"}),
@@ -73,8 +73,8 @@ def run(config: Dict):
         output_cache=config.get("feature_cache", "data/processed/features.joblib")
     )
     X_raw, meta = feature_builder.build(df,
-                                       text_col=config.get("text_col", "Description"),
-                                       image_col=config.get("image_col", "image_path"),
+                                       text_col=config.get("text_col", "catalog_content"),
+                                       image_col=config.get("image_col", "image_link"),
                                        force_rebuild=config.get("force_rebuild_features", False),
                                        y=y,
                                        mode="train")
@@ -186,9 +186,9 @@ if __name__ == "__main__":
     # basic config; change paths as needed
     cfg = {
         "data_path": "data/raw/train.csv",
-        "text_col": "Description",
-        "image_col": "image_path",
-        "target_col": "Price",
+        "text_col": "catalog_content",
+        "image_col": "image_link",
+        "target_col": "price",
         "sample_frac": 0.01,            # small sample for quick runs; set to 1.0 for full run
         "n_splits": 3,
         "dim_method": "umap",

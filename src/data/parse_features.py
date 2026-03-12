@@ -134,7 +134,7 @@ class Parser:
         return 0.0, ""
 
     @staticmethod
-    def add_parsed_features(df: pd.DataFrame, text_col: str = "Description") -> pd.DataFrame:
+    def add_parsed_features(df: pd.DataFrame, text_col: str = "catalog_content") -> pd.DataFrame:
         df = df.copy()
         df[f"{text_col}_clean_len"] = df[text_col].fillna("").astype(str).apply(len)
         df["parsed_ounces"] = df[text_col].fillna("").astype(str).apply(Parser.parse_ounces)

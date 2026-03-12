@@ -1,6 +1,14 @@
 import argparse
 import json
 import os
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.utils.registry_loader import RegistryLoader
 
 
 def run_pre_deployment_checks(run_id: str, output: str, check_tests: bool, check_coverage: bool, check_security: bool) -> dict:
@@ -15,17 +23,15 @@ def run_pre_deployment_checks(run_id: str, output: str, check_tests: bool, check
         "failures": [],
     }
 
-    registry_path = "experiments/registry/index.json"
-    if not os.path.exists(registry_path):
-        result["failures"].append("Registry index not found")
-    else:
-        with open(registry_path, encoding="utf-8") as f:
-            registry = json.load(f)
-        run_entry = next((item for item in registry.get("runs", []) if item.get("run_id") == run_id), None)
+    try:
+        loader = RegistryLoader()
+        run_entry = loader.get_run_by_id(run_id)
         if run_entry is None:
             result["failures"].append(f"Run {run_id} not found in registry")
         elif run_entry.get("status") != "production":
             result["failures"].append(f"Run {run_id} is not in production stage")
+    except FileNotFoundError:
+        result["failures"].append("Registry index not found")
 
     if check_tests:
         result["health_checks"]["tests"] = os.path.exists("ci_cd/tests")

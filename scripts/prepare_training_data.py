@@ -3,9 +3,12 @@ import os
 
 import pandas as pd
 
+from src.utils.column_aliases import normalize_to_train_schema
+
 
 def prepare_training_data(input_path: str, output_path: str) -> str:
     raw_df = pd.read_csv(input_path)
+    raw_df, _ = normalize_to_train_schema(raw_df)
 
     required_cols = {"sample_id", "catalog_content", "price"}
     missing = sorted(required_cols.difference(raw_df.columns))
@@ -14,10 +17,10 @@ def prepare_training_data(input_path: str, output_path: str) -> str:
 
     prepared_df = pd.DataFrame(
         {
-            "unique_identifier": raw_df["sample_id"],
-            "Description": raw_df["catalog_content"].fillna("").astype(str),
-            "Price": raw_df["price"].astype(float),
-            "image_path": raw_df.get("image_link", "").fillna("").astype(str) if "image_link" in raw_df.columns else "",
+            "sample_id": raw_df["sample_id"],
+            "catalog_content": raw_df["catalog_content"].fillna("").astype(str),
+            "price": raw_df["price"].astype(float),
+            "image_link": raw_df.get("image_link", "").fillna("").astype(str) if "image_link" in raw_df.columns else "",
         }
     )
 

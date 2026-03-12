@@ -33,15 +33,8 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.ref_name }}
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+      - name: Setup Python and dependencies
+        uses: ./.github/actions/python-setup
 
       - name: Check data/concept drift
         id: drift
@@ -96,23 +89,10 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.ref_name }}
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Python and dependencies
+        uses: ./.github/actions/python-setup
         with:
-          python-version: '3.10'
-
-      - name: Cache pip packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          cache: 'true'
 
       - name: Download training data
         env:
@@ -131,10 +111,7 @@ jobs:
 
       - name: Prepare training dataset
         run: |
-          if [[ ! -f data/interim/train_prepared.csv ]]; then
-            python scripts/prepare_training_data.py --input data/raw/train.csv --output data/interim/train_prepared.csv
-          fi
-
+          python scripts/prepare_training_data.py --input data/raw/train.csv --output data/interim/train_prepared.csv
           test -f data/interim/train_prepared.csv || (echo "Missing data/interim/train_prepared.csv" && exit 1)
 
       - name: Run training pipeline
@@ -243,15 +220,8 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+      - name: Setup Python and dependencies
+        uses: ./.github/actions/python-setup
 
       - name: Pull smoke-test data
         env:

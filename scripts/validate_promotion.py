@@ -5,16 +5,23 @@ Verifies model is production-ready before promotion.
 
 import json
 import os
-from datetime import datetime
 from typing import Dict, Any
 import argparse
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.validation.slo_validator import SLOValidator
 
 
 def validate_promotion(
     run_id: str,
     target_stage: str,
-    min_accuracy: float = 0.70,
-    max_latency_p95: float = 2.0
+    min_accuracy: float | None = None,
+    max_latency_p95: float | None = None
 ) -> Dict[str, Any]:
     """
     Validate model metrics are acceptable for promotion.
@@ -49,34 +56,20 @@ def validate_promotion(
         
         accuracy = metrics.get("accuracy")
         if accuracy is not None:
-            if accuracy < min_accuracy:
-                result["failures"].append(
-                    f"Accuracy {accuracy:.3f} below threshold {min_accuracy}"
-                )
-            else:
-                result["metrics"]["accuracy"] = accuracy
+            result["metrics"]["accuracy"] = accuracy
         else:
             result["warnings"].append("Accuracy metric not logged; promotion will rely on SMAPE-based validation")
 
         best_smape = metrics.get("best.smape", metrics.get("smape"))
         if best_smape is not None:
             result["metrics"]["smape"] = best_smape
-            if target_stage == "production" and best_smape > 25.0:
-                result["failures"].append(
-                    f"Best SMAPE {best_smape:.3f} exceeds production threshold 25.0"
-                )
         else:
             result["warnings"].append("SMAPE metric not logged in MLflow")
         
         # Check latency
         latency_p95 = metrics.get("latency_p95")
         if latency_p95 is not None:
-            if latency_p95 > max_latency_p95:
-                result["failures"].append(
-                    f"P95 latency {latency_p95:.3f}s exceeds threshold {max_latency_p95}s"
-                )
-            else:
-                result["metrics"]["latency_p95"] = latency_p95
+            result["metrics"]["latency_p95"] = latency_p95
         else:
             result["warnings"].append("Latency metric not logged; skipping latency gate")
         
@@ -95,6 +88,17 @@ def validate_promotion(
         # Get training info
         result["metrics"]["training_duration"] = metrics.get("training_duration_seconds", None)
         result["metrics"]["dataset_size"] = params.get("dataset_size", None)
+
+        stage_name = "production" if target_stage == "production" else "canary" if target_stage == "canary" else "staging"
+        validator = SLOValidator()
+        slo_result = validator.validate_metrics(result["metrics"], stage=stage_name)
+        result["failures"].extend(slo_result["failures"])
+
+        # Backward-compatible CLI overrides
+        if min_accuracy is not None and accuracy is not None and accuracy < min_accuracy:
+            result["failures"].append(f"Accuracy {accuracy:.3f} below threshold {min_accuracy}")
+        if max_latency_p95 is not None and latency_p95 is not None and latency_p95 > max_latency_p95:
+            result["failures"].append(f"P95 latency {latency_p95:.3f}s exceeds threshold {max_latency_p95}s")
         
         # Promotion eligibility
         if target_stage == "production":
@@ -113,8 +117,8 @@ def main():
     parser.add_argument("--run-id", required=True, help="MLflow run ID")
     parser.add_argument("--target-stage", required=True, help="Target stage")
     parser.add_argument("--output", required=True, help="Output JSON file")
-    parser.add_argument("--min-accuracy", type=float, default=0.70)
-    parser.add_argument("--max-latency-p95", type=float, default=2.0)
+    parser.add_argument("--min-accuracy", type=float, default=None)
+    parser.add_argument("--max-latency-p95", type=float, default=None)
     
     args = parser.parse_args()
     

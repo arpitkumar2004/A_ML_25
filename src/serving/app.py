@@ -60,9 +60,9 @@ def _load_env_file() -> None:
 
 class PredictRequest(BaseModel):
     records: List[Dict[str, Any]] = Field(..., min_length=1)
-    text_col: str = "Description"
-    image_col: str = "image_path"
-    id_col: str = "unique_identifier"
+    text_col: str = "catalog_content"
+    image_col: str = "image_link"
+    id_col: str = "sample_id"
     pred_col: str = "predicted_price"
     target_transform: Optional[str] = None
     min_value: float = 0.0
@@ -345,13 +345,13 @@ def root():
 
             const payload = {
                 records: [{
-                    unique_identifier: uid,
-                    Description: desc,
-                    image_path: img
+                    sample_id: uid,
+                    catalog_content: desc,
+                    image_link: img
                 }],
-                text_col: 'Description',
-                image_col: 'image_path',
-                id_col: 'unique_identifier',
+                text_col: 'catalog_content',
+                image_col: 'image_link',
+                id_col: 'sample_id',
                 pred_col: 'predicted_price',
                 min_value: 0.0,
                 round: round

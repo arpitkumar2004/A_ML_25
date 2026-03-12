@@ -19,6 +19,7 @@ from ..models.stacker import Stacker
 from ..utils.run_registry import make_run_id, write_run_manifest
 from ..registry.model_registry import register_run
 from ..utils.mlflow_utils import MLflowTracker, mlflow_link
+from ..utils.column_aliases import resolve_column_name
 
 # Because this is giving error at this time
 try:
@@ -69,11 +70,20 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
 
         # 2. Parse features
         t_parse = time.perf_counter()
-        df = Parser.add_parsed_features(df, text_col=cfg.get("text_col", "Description"))
+        text_col = resolve_column_name(df.columns, cfg.get("text_col", "catalog_content"))
+        image_col = resolve_column_name(df.columns, cfg.get("image_col", "image_link"))
+        target_col = resolve_column_name(df.columns, cfg.get("target_col", "price"))
+        id_col = resolve_column_name(df.columns, cfg.get("id_col", "sample_id"))
+        cfg["text_col"] = text_col
+        cfg["image_col"] = image_col
+        cfg["target_col"] = target_col
+        cfg["id_col"] = id_col
+
+        df = Parser.add_parsed_features(df, text_col=text_col)
         timings["parse_features"] = round(time.perf_counter() - t_parse, 4)
 
         # 3. Prepare target before feature-selection-aware building
-        y = df[cfg.get("target_col", "Price")].values.astype(float)
+        y = df[target_col].values.astype(float)
 
         # 4. Build features (text + image + numeric + optional selection)
         t_features = time.perf_counter()
@@ -86,8 +96,8 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
         )
         X_raw, meta = fb.build(
             df,
-            text_col=cfg.get("text_col", "Description"),
-            image_col=cfg.get("image_col", "image_path"),
+            text_col=text_col,
+            image_col=image_col,
             force_rebuild=cfg.get("force_rebuild", False),
             y=y,
             mode="train",

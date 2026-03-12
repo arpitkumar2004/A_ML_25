@@ -1,8 +1,16 @@
 import argparse
 import json
 import os
+import sys
+from pathlib import Path
 
 import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.utils.registry_loader import RegistryLoader
 
 
 def main() -> None:
@@ -15,9 +23,8 @@ def main() -> None:
     if not os.path.exists(args.test_dataset):
         raise FileNotFoundError(f"Test dataset not found: {args.test_dataset}")
 
-    with open("experiments/registry/index.json", encoding="utf-8") as f:
-        registry = json.load(f)
-    run_entry = next((item for item in registry.get("runs", []) if item.get("run_id") == args.run_id), None)
+    loader = RegistryLoader()
+    run_entry = loader.get_run_by_id(args.run_id)
     if run_entry is None:
         raise ValueError(f"Run {args.run_id} not found in registry")
 

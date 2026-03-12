@@ -1,9 +1,9 @@
 inference:
   input_path: "data/test/catalog_test.csv"
   output_path: "experiments/submissions/submission.csv"
-  text_col: "Description"
-  image_col: "image_path"
-  id_col: "unique_identifier"
+  text_col: "catalog_content"
+  image_col: "image_link"
+  id_col: "sample_id"
   pred_col: "predicted_price"
   feature_cache: "data/processed/features.joblib"
   dim_cache: "data/processed/dimred.joblib"

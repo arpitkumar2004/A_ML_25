@@ -27,7 +27,7 @@ class Postprocessor:
         return np.round(preds, 2)
 
     @staticmethod
-    def to_submission_df(ids, preds: np.ndarray, id_col: str = "unique_identifier", pred_col: str = "predicted_price") -> pd.DataFrame:
+    def to_submission_df(ids, preds: np.ndarray, id_col: str = "sample_id", pred_col: str = "predicted_price") -> pd.DataFrame:
         return pd.DataFrame({id_col: ids, pred_col: preds})
 
     @staticmethod

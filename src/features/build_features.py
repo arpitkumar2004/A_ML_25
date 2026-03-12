@@ -112,7 +112,7 @@ class FeatureBuilder:
             return payload
         return None
 
-    def build(self, df: pd.DataFrame, text_col: str = "Description", image_col: str = "image_path",
+    def build(self, df: pd.DataFrame, text_col: str = "catalog_content", image_col: str = "image_link",
               numeric_cols: Optional[List[str]] = None, force_rebuild: bool = False,
               y: Optional[np.ndarray] = None, mode: str = "train") -> Tuple[Any, dict]:
         """

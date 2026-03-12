@@ -8,6 +8,14 @@ import os
 from datetime import datetime
 from typing import Dict, List, Any
 import argparse
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.utils.registry_loader import RegistryLoader
 
 
 def check_mlflow(uri: str, username: str, password: str) -> Dict[str, Any]:
@@ -40,20 +48,13 @@ def check_production_model() -> Dict[str, Any]:
     }
     
     try:
-        registry_path = "experiments/registry/index.json"
-        if not os.path.exists(registry_path):
-            result["message"] = "Registry index not found"
-            return result
-        
-        with open(registry_path) as f:
-            registry = json.load(f)
-        
-        production_run = registry.get("active_production_run_id")
+        loader = RegistryLoader()
+        production_run = loader.get_active_production_run_id()
         if not production_run:
             result["message"] = "No production model registered"
             return result
-        
-        production_entry = next((run for run in registry.get("runs", []) if run.get("run_id") == production_run), None)
+
+        production_entry = loader.get_run_by_id(production_run)
         if not production_entry:
             result["message"] = f"Production run {production_run} missing from registry entries"
             return result
@@ -79,6 +80,8 @@ def check_production_model() -> Dict[str, Any]:
             if result["passed"]
             else f"Production state mismatch for run {production_run}"
         )
+    except FileNotFoundError:
+        result["message"] = "Registry index not found"
     except Exception as e:
         result["message"] = f"Error checking production model: {str(e)}"
     
@@ -94,16 +97,9 @@ def check_registry() -> Dict[str, Any]:
     }
     
     try:
-        registry_path = "experiments/registry/index.json"
-        if not os.path.exists(registry_path):
-            result["message"] = "Registry index not found"
-            return result
-        
-        with open(registry_path) as f:
-            registry = json.load(f)
-        
-        runs = registry.get("runs", [])
-        production_run = registry.get("active_production_run_id")
+        loader = RegistryLoader()
+        runs = loader.list_runs()
+        production_run = loader.get_active_production_run_id()
         
         # Check for required states
         has_production = any(r.get("run_id") == production_run for r in runs if production_run)
@@ -111,6 +107,8 @@ def check_registry() -> Dict[str, Any]:
         
         result["passed"] = has_production and has_staging
         result["message"] = f"Registry OK: {len(runs)} models, production={production_run}"
+    except FileNotFoundError:
+        result["message"] = "Registry index not found"
     except Exception as e:
         result["message"] = f"Registry validation failed: {str(e)}"
     
@@ -126,17 +124,11 @@ def check_inference() -> Dict[str, Any]:
     }
     
     try:
-        registry_path = "experiments/registry/index.json"
+        loader = RegistryLoader()
         manifest_path = "experiments/registry/deployment_manifest.json"
         tracker_path = "experiments/registry/production_tracker.json"
 
-        if not os.path.exists(registry_path):
-            result["message"] = "Registry index not found"
-            return result
-
-        with open(registry_path) as f:
-            registry = json.load(f)
-        production_run = registry.get("active_production_run_id")
+        production_run = loader.get_active_production_run_id()
         if not production_run:
             result["message"] = "No active production run configured"
             return result
@@ -157,6 +149,8 @@ def check_inference() -> Dict[str, Any]:
             if result["passed"]
             else f"Deployment metadata mismatch: registry={production_run}, manifest={manifest_run}, tracker={tracker_run}"
         )
+    except FileNotFoundError:
+        result["message"] = "Registry index not found"
     except Exception as e:
         result["message"] = f"Inference test failed: {str(e)}"
     

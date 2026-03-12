@@ -8,10 +8,10 @@ data:
   random_state: 42
 
 columns:
-  text_col: "Description"
-  image_col: "image_path"
-  target_col: "Price"
-  id_col: "unique_identifier"
+  text_col: "catalog_content"
+  image_col: "image_link"
+  target_col: "price"
+  id_col: "sample_id"
 
 preprocessing:
   text_cleaning: true

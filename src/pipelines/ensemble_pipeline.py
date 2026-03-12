@@ -27,7 +27,7 @@ def run_ensemble_pipeline(cfg: Dict[str, Any]) -> Dict[str, Any]:
         y = cfg["y_array"]
     elif cfg.get("y_path") is not None:
         y_df = IO.read_csv(cfg["y_path"])
-        target_col = cfg.get("target_col", "Price")
+        target_col = cfg.get("target_col", "price")
         y = y_df[target_col].values
     else:
         raise ValueError("y_array or y_path must be provided in cfg to run ensemble pipeline.")

@@ -10,6 +10,7 @@ from ..utils.run_registry import make_run_id, write_run_manifest, append_jsonl
 from ..registry.model_registry import register_run
 from ..monitoring.data_quality import validate_batch_quality
 from ..utils.mlflow_utils import MLflowTracker, mlflow_link
+from ..utils.column_aliases import normalize_to_train_schema, resolve_column_name
 
 logger = LoggerFactory.get("inference_pipeline")
 
@@ -33,6 +34,7 @@ def run_inference_pipeline(cfg: Dict[str, Any]) -> str:
     try:
         t_load = time.perf_counter()
         df_in = IO.read_csv(cfg["input_path"])
+        df_in, _ = normalize_to_train_schema(df_in)
         timings["load_input"] = round(time.perf_counter() - t_load, 4)
         tracker.log_metrics({"inference_rows": len(df_in)})
 
@@ -63,8 +65,8 @@ def run_inference_pipeline(cfg: Dict[str, Any]) -> str:
         t_predict = time.perf_counter()
         preds = pp.predict(
             df_in,
-            text_col=cfg.get("text_col", "Description"),
-            image_col=cfg.get("image_col", "image_path"),
+            text_col=resolve_column_name(df_in.columns, cfg.get("text_col", "catalog_content")),
+            image_col=resolve_column_name(df_in.columns, cfg.get("image_col", "image_link")),
             force_rebuild_features=cfg.get("force_rebuild_features", False),
         )
         timings["predict"] = round(time.perf_counter() - t_predict, 4)
@@ -76,7 +78,7 @@ def run_inference_pipeline(cfg: Dict[str, Any]) -> str:
         if cfg.get("round", True):
             preds = Postprocessor.round_to_cents(preds)
         # prepare submission dataframe
-        id_col = cfg.get("id_col", "unique_identifier")
+        id_col = resolve_column_name(df_in.columns, cfg.get("id_col", "sample_id"))
         out_df = Postprocessor.to_submission_df(df_in[id_col].values, preds, id_col=id_col, pred_col=cfg.get("pred_col", "predicted_price"))
         out_path = cfg.get("output_path", "experiments/submissions/prediction.csv")
         IO.to_csv(out_df, out_path, index=False)

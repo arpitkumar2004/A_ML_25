@@ -13,6 +13,7 @@ from ..features.build_features import FeatureBuilder
 from ..features.dimensionality import DimReducer
 from ..models.stacker import Stacker
 from ..models.base_model import BaseModel
+from ..utils.column_aliases import normalize_to_train_schema, resolve_column_name
 
 logger = LoggerFactory.get("predict")
 
@@ -167,13 +168,17 @@ class PredictPipeline:
         pad = np.zeros((X_np.shape[0], expected - current), dtype=X_np.dtype)
         return np.hstack([X_np, pad])
 
-    def predict(self, df: pd.DataFrame, text_col: str = "Description", image_col: str = "image_path", force_rebuild_features: bool = False):
+    def predict(self, df: pd.DataFrame, text_col: str = "catalog_content", image_col: str = "image_link", force_rebuild_features: bool = False):
         """
         Input: df with same schema as training (unique_identifier, Description, Price optional, image_path optional)
         Returns: numpy array of final predictions (same order as df)
         """
         if df is None or len(df) == 0:
             raise ValueError("Empty dataframe passed to PredictPipeline.predict")
+
+        df, _ = normalize_to_train_schema(df)
+        text_col = resolve_column_name(df.columns, text_col)
+        image_col = resolve_column_name(df.columns, image_col)
 
         if text_col in df.columns:
             df = Parser.add_parsed_features(df, text_col=text_col)

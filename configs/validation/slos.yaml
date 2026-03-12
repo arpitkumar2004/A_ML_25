@@ -1,0 +1,16 @@
+validation:
+  staging:
+    min_accuracy: 0.65
+    max_smape: 30.0
+    max_latency_p95: 3.0
+    max_error_rate: 0.05
+  canary:
+    min_accuracy: 0.68
+    max_smape: 27.0
+    max_latency_p95: 2.5
+    max_error_rate: 0.03
+  production:
+    min_accuracy: 0.70
+    max_smape: 25.0
+    max_latency_p95: 2.0
+    max_error_rate: 0.02
