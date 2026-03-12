@@ -106,6 +106,8 @@ jobs:
             dvc pull -r origin data/raw/train.csv.dvc data/raw/test.csv.dvc || dvc pull -r origin
           fi
 
+          dvc pull -r origin data/raw/train.csv.dvc data/raw/test.csv.dvc
+
           test -f data/raw/train.csv || (echo "Missing data/raw/train.csv after DVC pull" && exit 1)
           test -f data/raw/test.csv || (echo "Missing data/raw/test.csv after DVC pull" && exit 1)
 
@@ -231,9 +233,15 @@ jobs:
           DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
           DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
         run: |
-          if command -v dvc &> /dev/null; then
-            dvc pull -r origin data/raw/train.csv.dvc data/raw/test.csv.dvc || dvc pull -r origin
+          if ! command -v dvc &> /dev/null; then
+            echo "DVC is required but not installed in this runner"
+            exit 1
           fi
+
+          dvc pull -r origin data/raw/train.csv.dvc data/raw/test.csv.dvc
+
+          test -f data/raw/train.csv || (echo "Missing data/raw/train.csv after DVC pull" && exit 1)
+          test -f data/raw/test.csv || (echo "Missing data/raw/test.csv after DVC pull" && exit 1)
 
       - name: Run inference smoke test
         run: |
