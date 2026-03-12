@@ -1,0 +1,10 @@
+training:
+  # ...existing config...
+  target_log_cfg:
+    enabled: true
+    alpha: 0.01
+    min_skew: 1.0
+    min_samples: 30
+    max_test_rows: 50000
+    random_state: 42
+  # ...existing config...

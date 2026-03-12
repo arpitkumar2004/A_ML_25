@@ -16,6 +16,14 @@ inference:
     min_features: 128
     save_path: "data/processed/feature_selector.joblib"
     random_state: 42
+  post_log_cfg:
+    enabled: true
+    alpha: 0.01
+    min_skew: 1.0
+    min_samples: 30
+    max_test_rows: 50000
+    save_path: "data/processed/post_feature_log_transform.joblib"
+    random_state: 42
   models_dir: "experiments/models"
   oof_meta_path: "experiments/oof/model_names.joblib"
   stacker_path: "experiments/models/stacker.joblib"

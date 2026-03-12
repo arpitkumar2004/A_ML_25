@@ -31,6 +31,7 @@ class PredictPipeline:
                  image_cfg: Dict = None,
                  numeric_cfg: Dict = None,
                  selector_cfg: Dict = None,
+                 post_log_cfg: Dict = None,
                  feature_cache: str = "data/processed/features.joblib",
                  dim_cache: str = "data/processed/dimred.joblib",
                  models_dir: str = "experiments/models",
@@ -40,6 +41,7 @@ class PredictPipeline:
         self.image_cfg = image_cfg or {"cache_path":"data/processed/image_embeddings.joblib"}
         self.numeric_cfg = numeric_cfg or {"scaler_path":"data/processed/numeric_scaler.joblib"}
         self.selector_cfg = selector_cfg or {}
+        self.post_log_cfg = post_log_cfg or {}
         self.feature_cache = feature_cache
         self.dim_cache = dim_cache
         self.models_dir = models_dir
@@ -52,6 +54,7 @@ class PredictPipeline:
             self.image_cfg,
             self.numeric_cfg,
             selector_cfg=self.selector_cfg,
+            post_log_cfg=self.post_log_cfg,
             output_cache=self.feature_cache,
         )
         self._dim_reducer = None

@@ -54,6 +54,7 @@ def run_inference_pipeline(cfg: Dict[str, Any]) -> str:
             image_cfg=cfg.get("image_cfg"),
             numeric_cfg=cfg.get("numeric_cfg"),
             selector_cfg=cfg.get("selector_cfg"),
+            post_log_cfg=cfg.get("post_log_cfg"),
             feature_cache=cfg.get("feature_cache", "data/processed/features.joblib"),
             dim_cache=cfg.get("dim_cache", "data/processed/dimred.joblib"),
             models_dir=cfg.get("models_dir", "experiments/models"),

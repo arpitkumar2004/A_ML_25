@@ -3,4 +3,4 @@ hyperparameter_sweep:
   n_trials: 50
   direction: "minimize"
   metric: "smape"
-  models_to_tune: ["LGBM", "XGB", "RF"]
+  models_to_tune: ["LGBM", "XGB", "RF", "CatBoost", "Linear"]

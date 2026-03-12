@@ -83,7 +83,48 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
         timings["parse_features"] = round(time.perf_counter() - t_parse, 4)
 
         # 3. Prepare target before feature-selection-aware building
-        y = df[target_col].values.astype(float)
+        # Statistically-gated log1p transform for target
+        target_log_cfg = cfg.get("target_log_cfg", {})
+        alpha = float(target_log_cfg.get("alpha", 0.01))
+        min_skew = float(target_log_cfg.get("min_skew", 1.0))
+        min_samples = int(target_log_cfg.get("min_samples", 30))
+        max_test_rows = int(target_log_cfg.get("max_test_rows", 50000))
+        random_state = int(target_log_cfg.get("random_state", 42))
+        y_raw = df[target_col].values.astype(float)
+        y_for_test = y_raw[:max_test_rows] if len(y_raw) > max_test_rows else y_raw
+        y_for_test = y_for_test[np.isfinite(y_for_test)]
+        apply_log1p = False
+        target_skew_meta = {}
+        if np.min(y_for_test) >= 0 and y_for_test.size >= min_samples:
+            from scipy.stats import skewtest
+            try:
+                z_stat, p_value = skewtest(y_for_test)
+                y_mean = float(np.mean(y_for_test))
+                y_std = float(np.std(y_for_test)) + 1e-12
+                y_skew = float(np.mean(((y_for_test - y_mean) / y_std) ** 3))
+                if (p_value < alpha) and (y_skew >= min_skew):
+                    apply_log1p = True
+                target_skew_meta = {
+                    "applied": apply_log1p,
+                    "p_value": p_value,
+                    "skew": y_skew,
+                    "alpha": alpha,
+                    "min_skew": min_skew,
+                    "method": "skewtest+log1p",
+                    "tested_rows": int(y_for_test.size),
+                }
+            except Exception as e:
+                target_skew_meta = {"applied": False, "error": str(e)}
+        else:
+            target_skew_meta = {"applied": False, "skipped_reason": "negative_or_insufficient_rows", "min": float(np.min(y_for_test)), "size": int(y_for_test.size)}
+        if apply_log1p:
+            y = np.log1p(np.clip(y_raw, a_min=0.0, a_max=None))
+            cfg["target_transform"] = "log1p"
+        else:
+            y = y_raw
+            cfg["target_transform"] = None
+        cfg["target_skew_meta"] = target_skew_meta
+        logger.info(f"Target log1p applied={apply_log1p}, meta={target_skew_meta}")
 
         # 4. Build features (text + image + numeric + optional selection)
         t_features = time.perf_counter()
@@ -92,6 +133,7 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
             cfg.get("image_cfg", {}),
             cfg.get("numeric_cfg", {}),
             selector_cfg=cfg.get("selector_cfg", {}),
+            post_log_cfg=cfg.get("post_log_cfg", {}),
             output_cache=cfg.get("feature_cache", "data/processed/features.joblib"),
         )
         X_raw, meta = fb.build(

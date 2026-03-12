@@ -1,5 +1,5 @@
 numeric_features:
-  scaler: "standard"   # standard, minmax
+  scaler: "minmax"   # standard, minmax, log, robust
   generate_ratios: true
   generate_price_stats: true
   cache_path: "data/processed/numeric_features.joblib"

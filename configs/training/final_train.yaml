@@ -1,7 +1,7 @@
 training:
   run_full_training: true
   data_path: "data/interim/train_prepared.csv"
-  sample_frac: 0.05
+  sample_frac: 0.001
   target_col: "price"
   text_col: "catalog_content"
   image_col: "image_link"
@@ -10,6 +10,9 @@ training:
   models:
     - "Linear"
     - "RF"
+    - "LGBM"
+    - "XGB"
+    - "CatBoost"
 
   feature_cache: "data/processed/features.joblib"
   dim_cache: "data/processed/dimred.joblib"
@@ -21,6 +24,15 @@ training:
     k: 512
     min_features: 128
     save_path: "data/processed/feature_selector.joblib"
+    random_state: 42
+
+  post_log_cfg:
+    enabled: true
+    alpha: 0.01
+    min_skew: 1.0
+    min_samples: 30
+    max_test_rows: 50000
+    save_path: "data/processed/post_feature_log_transform.joblib"
     random_state: 42
 
   trainer:

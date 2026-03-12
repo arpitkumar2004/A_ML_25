@@ -1,5 +1,5 @@
 cv:
   n_splits: 5
   shuffle: true
-  stratify: false   # set True if target can be stratified
+  stratify: true   # set True if target can be stratified
   random_state: 42

@@ -11,6 +11,7 @@ from .text_embeddings import TextEmbedder
 from .image_embeddings import ImageEmbedder
 from .numeric_features import NumericBuilder
 from .feature_selector import FeatureSelector
+from .post_feature_log_transform import PostFeatureLogTransformer
 
 logger = LoggerFactory.get("build_features")
 
@@ -30,6 +31,7 @@ class FeatureBuilder:
                  image_cfg: dict,
                  numeric_cfg: dict,
                  selector_cfg: Optional[dict] = None,
+                 post_log_cfg: Optional[dict] = None,
                  output_cache: Optional[str] = "data/processed/features.joblib"):
         self.text_embedder = TextEmbedder(**text_cfg)
         self.image_embedder = ImageEmbedder(**image_cfg)
@@ -42,6 +44,16 @@ class FeatureBuilder:
             min_features=int(self.selector_cfg.get("min_features", 64)),
             save_path=self.selector_cfg.get("save_path", "data/processed/feature_selector.joblib"),
             random_state=int(self.selector_cfg.get("random_state", 42)),
+        )
+        self.post_log_cfg = post_log_cfg or {}
+        self.post_log_transformer = PostFeatureLogTransformer(
+            enabled=bool(self.post_log_cfg.get("enabled", False)),
+            alpha=float(self.post_log_cfg.get("alpha", 0.01)),
+            min_skew=float(self.post_log_cfg.get("min_skew", 1.0)),
+            min_samples=int(self.post_log_cfg.get("min_samples", 30)),
+            max_test_rows=int(self.post_log_cfg.get("max_test_rows", 50000)),
+            save_path=self.post_log_cfg.get("save_path", "data/processed/post_feature_log_transform.joblib"),
+            random_state=int(self.post_log_cfg.get("random_state", 42)),
         )
         self.output_cache = output_cache
 
@@ -205,12 +217,18 @@ class FeatureBuilder:
                 X = self.feature_selector.transform(X)
                 selection_meta.update({"applied": True})
 
+        if mode == "train":
+            X, post_log_meta = self.post_log_transformer.fit_transform(X)
+        else:
+            X, post_log_meta = self.post_log_transformer.transform(X)
+
         meta = {
             "text_shape": X_text.shape,
             "image_shape": X_image.shape,
             "numeric_shape": X_num.shape,
             "numeric_cols": used_numeric_cols,
             "selection": selection_meta,
+            "post_log_transform": post_log_meta,
             "feature_fingerprint": feature_fp,
             "mode": mode,
         }
