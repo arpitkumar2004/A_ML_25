@@ -5,4 +5,4 @@ def test_loader(tmp_path):
     p = tmp_path/"train.csv"
     df.to_csv(p, index=False)
     loaded = load_train_df(str(p))
-    assert "Description" in loaded.columns
+    assert "catalog_content" in loaded.columns
