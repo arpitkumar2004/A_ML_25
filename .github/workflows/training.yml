@@ -189,8 +189,17 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git status
           git add .
-          git pull --rebase --autostash origin "${{ github.ref_name }}"
+          if ! git diff --quiet; then
+            echo "Staging unstaged changes before pull"
+            git commit -m "ci: auto-stage before rebase"
+          fi
+          git pull --rebase --autostash origin "${{ github.ref_name }}" || {
+            echo "Git pull --rebase failed. Please check for unresolved conflicts or unstaged changes.";
+            git status;
+            exit 1;
+          }
           git add experiments/registry
           if [[ -f "experiments/models/${{ steps.train.outputs.run_id }}/manifest.json" ]]; then
             git add "experiments/models/${{ steps.train.outputs.run_id }}/manifest.json"
