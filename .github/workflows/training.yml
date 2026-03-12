@@ -190,26 +190,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git status
-          git add .
-          if ! git diff --quiet; then
-            echo "Staging unstaged changes before pull"
-            git commit -m "ci: auto-stage before rebase"
-          fi
+          git add experiments/registry
           git pull --rebase --autostash origin "${{ github.ref_name }}" || {
             echo "Git pull --rebase failed. Please check for unresolved conflicts or unstaged changes.";
             git status;
             exit 1;
           }
-          git add experiments/registry
-          if [[ -f "experiments/models/${{ steps.train.outputs.run_id }}/manifest.json" ]]; then
-            git add "experiments/models/${{ steps.train.outputs.run_id }}/manifest.json"
-          fi
           if git diff --cached --quiet; then
             echo "No registry changes to commit"
           else
             git commit -m "ci: register training run ${{ steps.train.outputs.run_id }}"
             git push origin HEAD:${{ github.ref_name }}
           fi
+          echo "Model artifacts are managed by DVC/DagsHub, not Git."
 
       - name: Upload training artifacts
         if: always()
@@ -217,11 +210,25 @@ jobs:
         with:
           name: training-artifacts
           path: |
+            experiments/models/
             experiments/registry/
             experiments/reports/
             /tmp/validation.json
             /tmp/training_outputs.json
           retention-days: 30
+
+      - name: Push model artifacts to DagsHub
+        if: steps.validate.outputs.validation_passed == 'true'
+        env:
+          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
+          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+        run: |
+          if command -v dvc &> /dev/null; then
+            dvc push -r origin
+            echo "Model artifacts pushed to DagsHub via DVC."
+          else
+            echo "DVC not installed; skipping artifact push."
+          fi
 
       - name: Notify on failure
         if: failure()
