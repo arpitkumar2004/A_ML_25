@@ -158,7 +158,7 @@ def check_inference() -> Dict[str, Any]:
 
 
 def run_health_checks(
-    check_mlflow: bool = True,
+    do_check_mlflow: bool = True,
     check_production_model: bool = True,
     check_registry: bool = True,
     check_inference: bool = True
@@ -168,7 +168,7 @@ def run_health_checks(
     checks = []
     passed_count = 0
     
-    if check_mlflow:
+    if do_check_mlflow:
         uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
         username = os.getenv("MLFLOW_TRACKING_USERNAME", "")
         password = os.getenv("MLFLOW_TRACKING_PASSWORD", "")
@@ -223,7 +223,7 @@ def main():
     args = parser.parse_args()
     
     result = run_health_checks(
-        check_mlflow=args.check_mlflow,
+        do_check_mlflow=args.check_mlflow,
         check_production_model=args.check_production_model,
         check_registry=args.check_registry,
         check_inference=args.check_inference
