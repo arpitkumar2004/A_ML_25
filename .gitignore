@@ -36,7 +36,6 @@ notebooks/.ipynb_checkpoints
 logs/
 models/
 !src/models/
-!src/models/**
 student_resource/
 docs/*.md
 scripts/*.ps1

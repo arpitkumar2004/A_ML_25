@@ -1,7 +1,7 @@
 training:
   run_full_training: true
   data_path: "data/interim/train_prepared.csv"
-  sample_frac: 0.001
+  sample_frac: 1.0
   target_col: "price"
   text_col: "catalog_content"
   image_col: "image_link"
