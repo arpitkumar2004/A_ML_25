@@ -54,10 +54,10 @@ training:
   mlflow:
     enabled: true
     tracking_uri: ""
-    experiment_name: "A_ML_25-train"
+    experiment_name: "A_ML_25_final_training"
     model_registry:
       enabled: true
-      name: "A_ML_25-train-model"
+      name: "A_ML_25_final_models"
     dagshub:
       enabled: true
       repo_owner: "arpitkumar2004"
