@@ -23,6 +23,8 @@ jobs:
   publish-space:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    outputs:
+      resolved_run_id: ${{ steps.resolve.outputs.run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,18 +34,28 @@ jobs:
       - name: Setup Python and dependencies
         uses: ./.github/actions/python-setup
 
+      - name: Resolve canonical bundle-backed run id
+        id: resolve
+        run: |
+          python scripts/resolve_registry_run.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --output /tmp/resolved_hf_run.json
+
+          RUN_ID=$(python -c "import json; print(json.load(open('/tmp/resolved_hf_run.json', encoding='utf-8'))['resolved_run_id'])")
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
       - name: Create Hugging Face Space package
         run: |
           python scripts/create_hf_space_package.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
+            --run-id "${{ steps.resolve.outputs.run_id }}" \
             --output-dir /tmp/hf-space-package \
             --space-repo-id "${{ github.event.inputs.space_repo_id }}" \
-            --service-image "hf-space:${{ github.event.inputs.run_id }}"
+            --service-image "hf-space:${{ steps.resolve.outputs.run_id }}"
 
       - name: Upload generated Space package
         uses: actions/upload-artifact@v4
         with:
-          name: hf-space-package-${{ github.event.inputs.run_id }}
+          name: hf-space-package-${{ steps.resolve.outputs.run_id }}
           path: /tmp/hf-space-package
           retention-days: 14
 
@@ -59,7 +71,7 @@ jobs:
             --package-dir /tmp/hf-space-package \
             --space-repo-id "${{ github.event.inputs.space_repo_id }}" \
             --token "$HF_SPACE_TOKEN" \
-            --commit-message "Deploy run ${{ github.event.inputs.run_id }} to Hugging Face Space" \
+            --commit-message "Deploy run ${{ steps.resolve.outputs.run_id }} to Hugging Face Space" \
             $EXTRA_ARGS
 
       - name: Verify Space live service
@@ -67,7 +79,7 @@ jobs:
           SPACE_URL="https://$(echo '${{ github.event.inputs.space_repo_id }}' | tr '/' '-').hf.space"
           python scripts/wait_for_live_service.py \
             --service-base-url "$SPACE_URL" \
-            --expected-run-id "${{ github.event.inputs.run_id }}" \
+            --expected-run-id "${{ steps.resolve.outputs.run_id }}" \
             --timeout-seconds 900 \
             --interval-seconds 20 \
             --output /tmp/hf-space-health.json
@@ -76,7 +88,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: hf-space-health-${{ github.event.inputs.run_id }}
+          name: hf-space-health-${{ steps.resolve.outputs.run_id }}
           path: /tmp/hf-space-health.json
           if-no-files-found: ignore
           retention-days: 7
