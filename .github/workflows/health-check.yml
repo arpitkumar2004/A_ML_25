@@ -12,11 +12,13 @@ on:
   workflow_call:
     secrets:
       MLFLOW_TRACKING_URI:
-        required: true
+        required: false
       MLFLOW_TRACKING_USERNAME:
-        required: true
+        required: false
       MLFLOW_TRACKING_PASSWORD:
-        required: true
+        required: false
+      PRODUCTION_SERVICE_BASE_URL:
+        required: false
 
 jobs:
   health-check:
@@ -40,12 +42,19 @@ jobs:
           MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
           MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
           MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+          SERVICE_BASE_URL: ${{ secrets.PRODUCTION_SERVICE_BASE_URL }}
         run: |
+          MLFLOW_FLAG=""
+          if [[ -n "$MLFLOW_TRACKING_URI" ]]; then
+            MLFLOW_FLAG="--check-mlflow"
+          fi
+
           python scripts/health_check.py \
-            --check-mlflow \
+            $MLFLOW_FLAG \
             --check-production-model \
             --check-registry \
             --check-inference \
+            --service-base-url "$SERVICE_BASE_URL" \
             --output /tmp/health_report.json
           
           python -c "
@@ -57,14 +66,21 @@ jobs:
           " >> $GITHUB_OUTPUT
 
       - name: Validate production model performance
+        env:
+          SERVICE_BASE_URL: ${{ secrets.PRODUCTION_SERVICE_BASE_URL }}
         run: |
-          python scripts/validate_production_model.py
+          python scripts/validate_production_model.py \
+            --service-base-url "$SERVICE_BASE_URL"
 
       - name: Check data/concept drift in production
         run: |
-          python scripts/check_production_drift.py \
-            --baseline experiments/registry/baseline_stats.json \
-            --output /tmp/drift_report.json
+          if [[ -f experiments/registry/baseline_stats.json ]]; then
+            python scripts/check_production_drift.py \
+              --baseline experiments/registry/baseline_stats.json \
+              --output /tmp/drift_report.json
+          else
+            printf '{"status":"skipped","reason":"baseline_stats_missing"}\n' > /tmp/drift_report.json
+          fi
 
       - name: Verify resource usage
         run: |

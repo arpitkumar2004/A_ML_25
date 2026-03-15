@@ -1,0 +1,70 @@
+{
+  "data_path": "data/interim/train_prepared.csv",
+  "sample_frac": 0.01,
+  "random_state": 42,
+  "seed": 42,
+  "text_col": "catalog_content",
+  "image_col": "__missing_image_col__",
+  "target_col": "price",
+  "id_col": "sample_id",
+  "text_cfg": {
+    "method": "tfidf",
+    "cache_path": "experiments/smoke_check_1pct/data/text_embeddings.joblib",
+    "vectorizer_path": "experiments/smoke_check_1pct/data/tfidf_vectorizer.joblib",
+    "tfidf_max_features": 512,
+    "tfidf_ngram_range": [
+      1,
+      2
+    ],
+    "model_name": "all-MiniLM-L6-v2"
+  },
+  "image_cfg": {
+    "cache_path": "experiments/smoke_check_1pct/data/image_embeddings.joblib"
+  },
+  "numeric_cfg": {
+    "scaler_path": "experiments/smoke_check_1pct/data/numeric_scaler.joblib"
+  },
+  "selector_cfg": {
+    "enabled": true,
+    "method": "f_regression",
+    "k": 128,
+    "min_features": 16,
+    "save_path": "experiments/smoke_check_1pct/data/feature_selector.joblib",
+    "random_state": 42
+  },
+  "post_log_cfg": {
+    "enabled": false,
+    "save_path": "experiments/smoke_check_1pct/data/post_feature_log_transform.joblib"
+  },
+  "feature_cache": "experiments/smoke_check_1pct/data/features.joblib",
+  "force_rebuild": true,
+  "dim_method": "pca",
+  "dim_components": 16,
+  "dim_cache": "experiments/smoke_check_1pct/data/dimred.joblib",
+  "use_dim_cache": false,
+  "models_out": "experiments/smoke_check_1pct/models",
+  "oof_out": "experiments/smoke_check_1pct/oof",
+  "reports_dir": "experiments/smoke_check_1pct/reports",
+  "report_out": "experiments/smoke_check_1pct/reports/model_comparison.joblib",
+  "report_csv": "experiments/smoke_check_1pct/reports/model_comparison.csv",
+  "registry_dir": "experiments/registry",
+  "run_stacker": false,
+  "n_splits": 2,
+  "stratify": false,
+  "mlflow": {
+    "enabled": false
+  },
+  "run_id": "train_20260315T093004Z",
+  "bundle_path": "experiments\\runs\\train_20260315T093004Z\\bundle",
+  "dim_meta_out": "experiments\\runs\\train_20260315T093004Z\\bundle\\reports\\dim_meta.joblib",
+  "target_transform": "log1p",
+  "target_skew_meta": {
+    "applied": true,
+    "p_value": 8.402757745457927e-197,
+    "skew": 10.137520332825485,
+    "alpha": 0.01,
+    "min_skew": 1.0,
+    "method": "skewtest+log1p",
+    "tested_rows": 750
+  }
+}

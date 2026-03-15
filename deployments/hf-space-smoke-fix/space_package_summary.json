@@ -1,0 +1,10 @@
+{
+  "run_id": "train_20260315T093004Z",
+  "space_repo_id": "arpitkumariitkgp/aml25",
+  "output_dir": "deployments\\hf-space-smoke-fix",
+  "dockerfile_path": "deployments\\hf-space-smoke-fix\\Dockerfile",
+  "readme_path": "deployments\\hf-space-smoke-fix\\README.md",
+  "bundle_dir": "deployments\\hf-space-smoke-fix\\model-bundle",
+  "metadata_dir": "deployments\\hf-space-smoke-fix\\metadata",
+  "service_image": "hf-space:train_20260315T093004Z"
+}

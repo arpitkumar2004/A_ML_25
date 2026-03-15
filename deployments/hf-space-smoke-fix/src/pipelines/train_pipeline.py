@@ -1,0 +1,411 @@
+# src/pipelines/train_pipeline.py
+import os
+import time
+from copy import deepcopy
+from typing import Dict, Any, Optional
+import numpy as np
+import pandas as pd
+
+from ..data.dataset_loader import DatasetLoader
+from ..data.parse_features import Parser
+from ..features.build_features import FeatureBuilder
+from ..features.dimensionality import DimReducer
+from ..training.trainer import Trainer
+from ..utils.logging_utils import LoggerFactory
+from ..utils.io import IO
+from ..models.lgb_model import LGBModel
+from ..models.linear_model import LinearModel
+from ..models.rf_model import RandomForestModel
+from ..models.stacker import Stacker
+from ..utils.run_registry import make_run_id, write_run_manifest
+from ..registry.model_registry import register_run
+from ..utils.mlflow_utils import MLflowTracker, mlflow_link
+from ..utils.column_aliases import resolve_column_name
+from ..utils.model_bundle import ensure_bundle_layout, copy_file_if_exists, copy_tree_contents
+
+# Because this is giving error at this time
+try:
+    from ..models.xgb_model import XGBModel
+except Exception:
+    XGBModel = None
+
+try:
+    from ..models.cat_model import CatModel
+except Exception:
+    CatModel = None
+
+
+logger = LoggerFactory.get("train_pipeline")
+
+def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) -> Dict[str, Any]:
+    """
+    End-to-end training pipeline using configuration dict.
+    cfg should contain:
+      - data_path, text_col, image_col, target_col, sample_frac
+      - text_cfg, image_cfg, numeric_cfg, feature_cache
+      - dim_method, dim_components, dim_cache
+      - models_out, n_splits
+      - model params as needed
+    Returns summary dict with model comparison & paths.
+    """
+    # prepare directories
+    run_id = cfg.get("run_id") or make_run_id(prefix="train")
+    experiments_dir = cfg.get("experiments_dir", "experiments")
+    bundle = ensure_bundle_layout(run_id=run_id, experiments_dir=experiments_dir)
+    cfg = deepcopy(cfg)
+    cfg["run_id"] = run_id
+    cfg["bundle_path"] = bundle["bundle_path"]
+
+    text_cfg = dict(cfg.get("text_cfg", {}) or {})
+    text_cfg.setdefault("method", "sbert")
+    text_cfg.setdefault("model_name", "all-MiniLM-L6-v2")
+    text_cfg.setdefault("cache_path", "data/processed/text_embeddings.joblib")
+    text_cfg.setdefault("vectorizer_path", "data/processed/tfidf_vectorizer.joblib")
+    cfg["text_cfg"] = text_cfg
+
+    image_cfg = dict(cfg.get("image_cfg", {}) or {})
+    image_cfg.setdefault("cache_path", "data/processed/image_embeddings.joblib")
+    cfg["image_cfg"] = image_cfg
+
+    numeric_cfg = dict(cfg.get("numeric_cfg", {}) or {})
+    numeric_cfg.setdefault("scaler_path", "data/processed/numeric_scaler.joblib")
+    cfg["numeric_cfg"] = numeric_cfg
+
+    selector_cfg = dict(cfg.get("selector_cfg", {}) or {})
+    selector_cfg.setdefault("save_path", "data/processed/feature_selector.joblib")
+    cfg["selector_cfg"] = selector_cfg
+
+    post_log_cfg = dict(cfg.get("post_log_cfg", {}) or {})
+    post_log_cfg.setdefault("save_path", "data/processed/post_feature_log_transform.joblib")
+    cfg["post_log_cfg"] = post_log_cfg
+
+    cfg["models_out"] = cfg.get("models_out") or bundle["models_dir"]
+    cfg["oof_out"] = cfg.get("oof_out") or bundle["oof_dir"]
+    cfg["reports_dir"] = cfg.get("reports_dir") or bundle["reports_dir"]
+    cfg["report_out"] = cfg.get("report_out") or bundle["model_report_joblib"]
+    cfg["report_csv"] = cfg.get("report_csv") or bundle["model_report_csv"]
+    cfg["dim_meta_out"] = cfg.get("dim_meta_out") or bundle["dim_meta_path"]
+    cfg["feature_cache"] = cfg.get("feature_cache") or bundle["feature_cache"]
+    cfg["dim_cache"] = cfg.get("dim_cache") or bundle["dim_cache"]
+
+    timings = {}
+    t0_total = time.perf_counter()
+    tracker = MLflowTracker(cfg=cfg, stage="train", run_id=run_id)
+    tracker.start()
+    tracker.log_config(cfg)
+    tracker.set_tags({"selected_model_filter": model_name or "all"})
+
+    os.makedirs(cfg.get("experiments_dir", "experiments"), exist_ok=True)
+    os.makedirs(cfg["models_out"], exist_ok=True)
+    os.makedirs(cfg["oof_out"], exist_ok=True)
+    os.makedirs(cfg["reports_dir"], exist_ok=True)
+
+    try:
+        # 1. Load data (optionally sample small fraction for quick dev)
+        t_load = time.perf_counter()
+        loader = DatasetLoader(cfg["data_path"])
+        df = loader.sample(frac=cfg.get("sample_frac", 1.0), random_state=cfg.get("random_state", 42))
+        logger.info(f"Loaded data with {len(df)} rows")
+        timings["load_data"] = round(time.perf_counter() - t_load, 4)
+        tracker.log_metrics({"train_rows": len(df)})
+
+        # 2. Parse features
+        t_parse = time.perf_counter()
+        text_col = resolve_column_name(df.columns, cfg.get("text_col", "catalog_content"))
+        image_col = resolve_column_name(df.columns, cfg.get("image_col", "image_link"))
+        target_col = resolve_column_name(df.columns, cfg.get("target_col", "price"))
+        id_col = resolve_column_name(df.columns, cfg.get("id_col", "sample_id"))
+        cfg["text_col"] = text_col
+        cfg["image_col"] = image_col
+        cfg["target_col"] = target_col
+        cfg["id_col"] = id_col
+
+        df = Parser.add_parsed_features(df, text_col=text_col)
+        timings["parse_features"] = round(time.perf_counter() - t_parse, 4)
+
+        # 3. Prepare target before feature-selection-aware building
+        # Statistically-gated log1p transform for target
+        target_log_cfg = cfg.get("target_log_cfg", {})
+        alpha = float(target_log_cfg.get("alpha", 0.01))
+        min_skew = float(target_log_cfg.get("min_skew", 1.0))
+        min_samples = int(target_log_cfg.get("min_samples", 30))
+        max_test_rows = int(target_log_cfg.get("max_test_rows", 50000))
+        random_state = int(target_log_cfg.get("random_state", 42))
+        y_raw = df[target_col].values.astype(float)
+        y_for_test = y_raw[:max_test_rows] if len(y_raw) > max_test_rows else y_raw
+        y_for_test = y_for_test[np.isfinite(y_for_test)]
+        apply_log1p = False
+        target_skew_meta = {}
+        if np.min(y_for_test) >= 0 and y_for_test.size >= min_samples:
+            from scipy.stats import skewtest
+            try:
+                z_stat, p_value = skewtest(y_for_test)
+                y_mean = float(np.mean(y_for_test))
+                y_std = float(np.std(y_for_test)) + 1e-12
+                y_skew = float(np.mean(((y_for_test - y_mean) / y_std) ** 3))
+                if (p_value < alpha) and (y_skew >= min_skew):
+                    apply_log1p = True
+                target_skew_meta = {
+                    "applied": apply_log1p,
+                    "p_value": p_value,
+                    "skew": y_skew,
+                    "alpha": alpha,
+                    "min_skew": min_skew,
+                    "method": "skewtest+log1p",
+                    "tested_rows": int(y_for_test.size),
+                }
+            except Exception as e:
+                target_skew_meta = {"applied": False, "error": str(e)}
+        else:
+            target_skew_meta = {"applied": False, "skipped_reason": "negative_or_insufficient_rows", "min": float(np.min(y_for_test)), "size": int(y_for_test.size)}
+        if apply_log1p:
+            y = np.log1p(np.clip(y_raw, a_min=0.0, a_max=None))
+            cfg["target_transform"] = "log1p"
+        else:
+            y = y_raw
+            cfg["target_transform"] = None
+        cfg["target_skew_meta"] = target_skew_meta
+        logger.info(f"Target log1p applied={apply_log1p}, meta={target_skew_meta}")
+
+        # 4. Build features (text + image + numeric + optional selection)
+        t_features = time.perf_counter()
+        fb = FeatureBuilder(
+            cfg["text_cfg"],
+            cfg["image_cfg"],
+            cfg["numeric_cfg"],
+            selector_cfg=cfg["selector_cfg"],
+            post_log_cfg=cfg["post_log_cfg"],
+            output_cache=cfg["feature_cache"],
+        )
+        X_raw, meta = fb.build(
+            df,
+            text_col=text_col,
+            image_col=image_col,
+            force_rebuild=cfg.get("force_rebuild", False),
+            y=y,
+            mode="train",
+        )
+        logger.info(f"Feature matrix built. meta={meta}")
+        timings["build_features"] = round(time.perf_counter() - t_features, 4)
+
+        # 4. Prepare dense for dim reduction
+        X_dense = None
+        if hasattr(X_raw, "toarray") or hasattr(X_raw, "todense"):
+            try:
+                X_dense = np.asarray(X_raw.todense() if hasattr(X_raw, "todense") else X_raw.toarray())
+            except Exception:
+                X_dense = None
+        else:
+            X_dense = np.asarray(X_raw)
+
+        # 5. Dimensionality reduction
+        t_dim = time.perf_counter()
+        reducer = DimReducer(method=cfg.get("dim_method", "umap"), n_components=cfg.get("dim_components", 50), cache_path=cfg["dim_cache"])
+        if X_dense is not None:
+            X_final, dim_meta = reducer.fit_transform(X_dense, use_cache=cfg.get("use_dim_cache", True), fingerprint=meta.get("feature_fingerprint"))
+        else:
+            X_final = X_raw  # sparse, fall back
+            dim_meta = {}
+        IO.save_pickle(dim_meta, cfg["dim_meta_out"])
+        timings["dimensionality"] = round(time.perf_counter() - t_dim, 4)
+
+        # 7. Run CV for each model
+        t_train = time.perf_counter()
+        trainer = Trainer(output_dir=cfg["models_out"], n_splits=cfg.get("n_splits", 5), random_state=cfg.get("random_state", 42), stratify=cfg.get("stratify", False))
+        results = []
+        oof_list = []
+        model_names = []
+        trained_models = {}
+
+        # define models to run
+        model_entries = [
+            ("Linear", LinearModel, {}),
+            ("RF", RandomForestModel, cfg.get("rf_params", {"n_estimators": cfg.get("rf_n_estimators", 200)})),
+            ("LGBM", LGBModel, {"params": cfg.get("lgb_params", {"n_estimators": cfg.get("lgb_n_estimators",200), "learning_rate":0.05})})
+        ]
+
+        # append optional models if available
+        if XGBModel is not None:
+            model_entries.append(("XGB", XGBModel, cfg.get("xgb_params", {"params": {"n_estimators": 200}})))
+        if CatModel is not None:
+            model_entries.append(("Cat", CatModel, cfg.get("cat_params", {"params": {"iterations": 300}})))
+
+        if model_name:
+            selected = model_name.strip().lower()
+            model_entries = [entry for entry in model_entries if entry[0].lower() == selected]
+            if not model_entries:
+                raise ValueError(f"Unsupported or unavailable model_name='{model_name}'. Available: Linear, RF, LGBM" + (", XGB" if XGBModel is not None else "") + (", Cat" if CatModel is not None else ""))
+
+        for name, ModelClass, ctor_params in model_entries:
+            try:
+                logger.info(f"Training model: {name}")
+                models, oof, metrics_summary = trainer.run_cv(ModelClass, model_params=ctor_params, X=X_final, y=y, fit_params={})
+                results.append({"name": name, "metrics": metrics_summary})
+                oof_list.append(oof.reshape(-1,1))
+                model_names.append(name)
+                trained_models[name] = models[0] if models else None
+                tracker.log_metrics(
+                    {
+                        f"model.{name}.rmse": metrics_summary.get("rmse", 0.0),
+                        f"model.{name}.mae": metrics_summary.get("mae", 0.0),
+                        f"model.{name}.r2": metrics_summary.get("r2", 0.0),
+                        f"model.{name}.smape": metrics_summary.get("smape", 0.0),
+                    }
+                )
+            except Exception as e:
+                logger.exception(f"Model {name} failed: {e}")
+
+        # 8. Save model comparison
+        rows = []
+        for r in results:
+            m = r["metrics"]
+            rows.append({"model": r["name"], "rmse": m["rmse"], "mae": m["mae"], "r2": m["r2"], "smape": m["smape"]})
+        df_report = pd.DataFrame(rows).sort_values("smape")
+        IO.save_pickle(df_report, cfg["report_out"])
+        df_report.to_csv(cfg["report_csv"], index=False)
+        if not df_report.empty:
+            best = df_report.iloc[0].to_dict()
+            best_name = str(best.get("model", ""))
+            registry_meta = tracker.register_model_if_possible(trained_models.get(best_name), model_key=best_name)
+            tracker.log_metrics(
+                {
+                    "best.rmse": best.get("rmse", 0.0),
+                    "best.mae": best.get("mae", 0.0),
+                    "best.r2": best.get("r2", 0.0),
+                    "best.smape": best.get("smape", 0.0),
+                }
+            )
+            tracker.set_tags({"best_model": best.get("model", "")})
+        else:
+            registry_meta = {
+                "enabled": False,
+                "registered": False,
+                "registered_model_name": "",
+                "version": None,
+                "model_uri": "",
+                "artifact_path": "",
+                "error": "",
+            }
+
+        # 9. Save OOF matrix and model names for stacking
+        if oof_list:
+            OOF = np.hstack(oof_list)
+            IO.save_pickle(OOF, os.path.join(cfg["oof_out"], "oof_matrix.joblib"))
+            IO.save_pickle(np.array(model_names), os.path.join(cfg["oof_out"], "model_names.joblib"))
+            logger.info(f"Saved OOF matrix with shape {OOF.shape}")
+            tracker.log_metrics({"oof_cols": OOF.shape[1], "oof_rows": OOF.shape[0]})
+
+        stacker_summary_path = os.path.join(cfg["reports_dir"], "stacker_summary.joblib")
+
+        # 10. Run Stacker (meta-level) if requested
+        if cfg.get("run_stacker", True) and oof_list:
+            # fit stacker on OOF
+            meta_ooF = OOF
+            stacker = Stacker(method=cfg.get("stacker_method", "ridge"), params=cfg.get("stacker_params", {"alpha":1.0}), n_splits=cfg.get("stacker_n_splits", 5), save_path=os.path.join(cfg["models_out"], "stacker.joblib"))
+            stacker_summary = stacker.fit_cv(meta_ooF, y, fit_final=True)
+            IO.save_pickle(stacker_summary, stacker_summary_path)
+            logger.info(f"Stacker finished. summary: {stacker_summary}")
+            tracker.log_metrics({
+                "stacker.rmse": stacker_summary.get("rmse", 0.0),
+                "stacker.mae": stacker_summary.get("mae", 0.0),
+                "stacker.r2": stacker_summary.get("r2", 0.0),
+                "stacker.smape": stacker_summary.get("smape", 0.0),
+            })
+        timings["train_and_eval"] = round(time.perf_counter() - t_train, 4)
+        timings["total"] = round(time.perf_counter() - t0_total, 4)
+
+        # Snapshot all runtime-critical artifacts into the immutable bundle.
+        copy_tree_contents(cfg["models_out"], bundle["models_dir"])
+        copy_file_if_exists(os.path.join(cfg["oof_out"], "oof_matrix.joblib"), bundle["oof_path"])
+        copy_file_if_exists(os.path.join(cfg["oof_out"], "model_names.joblib"), bundle["oof_meta_path"])
+        copy_file_if_exists(cfg["report_out"], bundle["model_report_joblib"])
+        copy_file_if_exists(cfg["report_csv"], bundle["model_report_csv"])
+        copy_file_if_exists(cfg["dim_meta_out"], bundle["dim_meta_path"])
+        copy_file_if_exists(stacker_summary_path, bundle["stacker_summary_path"])
+        copy_file_if_exists(cfg["dim_cache"], bundle["dim_cache"])
+        copy_file_if_exists(cfg["feature_cache"], bundle["feature_cache"])
+        copy_file_if_exists(cfg["selector_cfg"].get("save_path"), bundle["selector_path"])
+        copy_file_if_exists(cfg["numeric_cfg"].get("scaler_path"), bundle["numeric_scaler_path"])
+        copy_file_if_exists(cfg["post_log_cfg"].get("save_path"), bundle["post_log_transform_path"])
+        copy_file_if_exists(cfg["text_cfg"].get("vectorizer_path"), bundle["text_vectorizer_path"])
+        copy_file_if_exists(cfg["text_cfg"].get("cache_path"), bundle["text_embeddings_cache"])
+        copy_file_if_exists(cfg["image_cfg"].get("cache_path"), bundle["image_embeddings_cache"])
+        IO.save_json(cfg, bundle["config_path"], indent=2)
+
+        manifest_outputs = {
+            "model_report": bundle["model_report_csv"],
+            "oof_path": bundle["oof_path"],
+            "dim_cache": bundle["dim_cache"],
+            "feature_cache": bundle["feature_cache"],
+            "selector_path": bundle["selector_path"],
+            "numeric_scaler_path": bundle["numeric_scaler_path"],
+            "stacker_summary": bundle["stacker_summary_path"],
+            "mlflow": mlflow_link(tracker.mlflow_run_id, tracker.tracking_uri, tracker.experiment_name),
+            "model_registry": registry_meta,
+            "bundle": {
+                "bundle_path": bundle["bundle_path"],
+                "manifest_path": bundle["manifest_path"],
+                "config_path": bundle["config_path"],
+                "models_dir": bundle["models_dir"],
+                "oof_dir": bundle["oof_dir"],
+                "oof_meta_path": bundle["oof_meta_path"],
+                "reports_dir": bundle["reports_dir"],
+                "artifacts_dir": bundle["artifacts_dir"],
+                "stacker_path": bundle["stacker_path"],
+                "text_vectorizer_path": bundle["text_vectorizer_path"],
+                "post_log_transform_path": bundle["post_log_transform_path"],
+            },
+        }
+        manifest_path = write_run_manifest(
+            run_id=run_id,
+            stage="train",
+            cfg=cfg,
+            outputs=manifest_outputs,
+            timings=timings,
+            registry_dir=cfg.get("registry_dir", "experiments/registry"),
+            out_path=bundle["manifest_path"],
+        )
+        # Compatibility mirror for existing tools that still search registry manifests directly.
+        write_run_manifest(
+            run_id=run_id,
+            stage="train",
+            cfg=cfg,
+            outputs=manifest_outputs,
+            timings=timings,
+            registry_dir=cfg.get("registry_dir", "experiments/registry"),
+        )
+        register_run(
+            run_id=run_id,
+            manifest_path=manifest_path,
+            stage="train",
+            registry_dir=cfg.get("registry_dir", "experiments/registry"),
+            status="staging",
+            tracking={"mlflow": manifest_outputs.get("mlflow", {})},
+            bundle_path=bundle["bundle_path"],
+        )
+
+        tracker.log_metrics({f"timing.{k}": v for k, v in timings.items()})
+        tracker.log_artifacts_if_exists(
+            [
+                bundle["model_report_csv"],
+                bundle["stacker_summary_path"],
+                bundle["oof_meta_path"],
+                manifest_path,
+            ],
+            artifact_path="artifacts",
+        )
+
+        summary = {
+            "model_report": bundle["model_report_csv"],
+            "oof_path": bundle["oof_path"],
+            "run_id": run_id,
+            "mlflow_run_id": tracker.mlflow_run_id,
+            "manifest_path": manifest_path,
+            "bundle_path": bundle["bundle_path"],
+            "timings_seconds": timings,
+        }
+        tracker.end(status="FINISHED")
+        return summary
+    except Exception:
+        tracker.end(status="FAILED")
+        raise

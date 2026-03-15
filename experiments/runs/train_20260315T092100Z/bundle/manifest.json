@@ -1,0 +1,121 @@
+{
+  "run_id": "train_20260315T092100Z",
+  "stage": "train",
+  "created_utc": "2026-03-15T09:21:06.336159+00:00",
+  "reproducibility": {
+    "config_sha256": "a9a78b40a55d5f6c5df7b688eeebb93de08d063bd7ac81ce064e26d465fe69e6",
+    "pythonhashseed": "",
+    "seed": 42
+  },
+  "config": {
+    "data_path": "data/interim/train_prepared.csv",
+    "sample_frac": 0.01,
+    "random_state": 42,
+    "seed": 42,
+    "text_col": "catalog_content",
+    "image_col": "image_link",
+    "target_col": "price",
+    "id_col": "sample_id",
+    "text_cfg": {
+      "method": "tfidf",
+      "cache_path": "experiments/quick_verify/text_embeddings.joblib",
+      "vectorizer_path": "experiments/quick_verify/tfidf_vectorizer.joblib",
+      "tfidf_max_features": 512,
+      "tfidf_ngram_range": [
+        1,
+        2
+      ],
+      "model_name": "all-MiniLM-L6-v2"
+    },
+    "image_cfg": {
+      "cache_path": "experiments/quick_verify/image_embeddings.joblib"
+    },
+    "numeric_cfg": {
+      "scaler_path": "experiments/quick_verify/numeric_scaler.joblib"
+    },
+    "selector_cfg": {
+      "enabled": true,
+      "method": "f_regression",
+      "k": 128,
+      "min_features": 16,
+      "save_path": "experiments/quick_verify/feature_selector.joblib",
+      "random_state": 42
+    },
+    "post_log_cfg": {
+      "enabled": false,
+      "save_path": "experiments/quick_verify/post_feature_log_transform.joblib"
+    },
+    "feature_cache": "experiments/quick_verify/features.joblib",
+    "dim_cache": "experiments/quick_verify/dimred.joblib",
+    "dim_method": "pca",
+    "dim_components": 16,
+    "n_splits": 2,
+    "run_stacker": false,
+    "experiments_dir": "experiments",
+    "registry_dir": "experiments/registry",
+    "force_rebuild": true,
+    "run_id": "train_20260315T092100Z",
+    "bundle_path": "experiments\\runs\\train_20260315T092100Z\\bundle",
+    "models_out": "experiments\\runs\\train_20260315T092100Z\\bundle\\models",
+    "oof_out": "experiments\\runs\\train_20260315T092100Z\\bundle\\oof",
+    "reports_dir": "experiments\\runs\\train_20260315T092100Z\\bundle\\reports",
+    "report_out": "experiments\\runs\\train_20260315T092100Z\\bundle\\reports\\model_comparison.joblib",
+    "report_csv": "experiments\\runs\\train_20260315T092100Z\\bundle\\reports\\model_comparison.csv",
+    "dim_meta_out": "experiments\\runs\\train_20260315T092100Z\\bundle\\reports\\dim_meta.joblib",
+    "target_transform": "log1p",
+    "target_skew_meta": {
+      "applied": true,
+      "p_value": 8.402757745457927e-197,
+      "skew": 10.137520332825485,
+      "alpha": 0.01,
+      "min_skew": 1.0,
+      "method": "skewtest+log1p",
+      "tested_rows": 750
+    }
+  },
+  "outputs": {
+    "model_report": "experiments\\runs\\train_20260315T092100Z\\bundle\\reports\\model_comparison.csv",
+    "oof_path": "experiments\\runs\\train_20260315T092100Z\\bundle\\oof\\oof_matrix.joblib",
+    "dim_cache": "experiments\\runs\\train_20260315T092100Z\\bundle\\artifacts\\dimred.joblib",
+    "feature_cache": "experiments\\runs\\train_20260315T092100Z\\bundle\\artifacts\\features.joblib",
+    "selector_path": "experiments\\runs\\train_20260315T092100Z\\bundle\\artifacts\\feature_selector.joblib",
+    "numeric_scaler_path": "experiments\\runs\\train_20260315T092100Z\\bundle\\artifacts\\numeric_scaler.joblib",
+    "stacker_summary": "experiments\\runs\\train_20260315T092100Z\\bundle\\reports\\stacker_summary.joblib",
+    "mlflow": {
+      "enabled": false,
+      "mlflow_run_id": null,
+      "tracking_uri": "",
+      "experiment_name": "A_ML_25"
+    },
+    "model_registry": {
+      "enabled": false,
+      "registered": false,
+      "registered_model_name": "",
+      "version": null,
+      "model_uri": "",
+      "artifact_path": "",
+      "error": ""
+    },
+    "bundle": {
+      "bundle_path": "experiments\\runs\\train_20260315T092100Z\\bundle",
+      "manifest_path": "experiments\\runs\\train_20260315T092100Z\\bundle\\manifest.json",
+      "config_path": "experiments\\runs\\train_20260315T092100Z\\bundle\\config.json",
+      "models_dir": "experiments\\runs\\train_20260315T092100Z\\bundle\\models",
+      "oof_dir": "experiments\\runs\\train_20260315T092100Z\\bundle\\oof",
+      "oof_meta_path": "experiments\\runs\\train_20260315T092100Z\\bundle\\oof\\model_names.joblib",
+      "reports_dir": "experiments\\runs\\train_20260315T092100Z\\bundle\\reports",
+      "artifacts_dir": "experiments\\runs\\train_20260315T092100Z\\bundle\\artifacts",
+      "stacker_path": "experiments\\runs\\train_20260315T092100Z\\bundle\\models\\stacker.joblib",
+      "text_vectorizer_path": "experiments\\runs\\train_20260315T092100Z\\bundle\\artifacts\\tfidf_vectorizer.joblib",
+      "post_log_transform_path": "experiments\\runs\\train_20260315T092100Z\\bundle\\artifacts\\post_feature_log_transform.joblib"
+    }
+  },
+  "timings_seconds": {
+    "load_data": 2.7257,
+    "parse_features": 1.2412,
+    "build_features": 1.4775,
+    "dimensionality": 0.0639,
+    "train_and_eval": 0.1491,
+    "total": 5.723
+  }
+}

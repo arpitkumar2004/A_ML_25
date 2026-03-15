@@ -124,8 +124,8 @@ jobs:
           MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
           DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
           DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
-          DAGSHUB_MLFLOW_ENABLED: 'true'
-          MLFLOW_ENABLED: 'true'
+          DAGSHUB_MLFLOW_ENABLED: ${{ secrets.DAGSHUB_TOKEN != '' && 'true' || 'false' }}
+          MLFLOW_ENABLED: ${{ secrets.MLFLOW_TRACKING_URI != '' && 'true' || 'false' }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -147,25 +147,23 @@ jobs:
           payload = {
               'local_run_id': latest['run_id'],
               'manifest_path': latest['manifest_path'],
+              'bundle_path': latest.get('bundle_path', ''),
               'mlflow_run_id': manifest.get('outputs', {}).get('mlflow', {}).get('mlflow_run_id', '')
           }
           json.dump(payload, open('/tmp/training_outputs.json', 'w', encoding='utf-8'), indent=2)
           print(json.dumps(payload, indent=2))
           "
 
-          RUN_ID=$(python -c "import json; v=json.load(open('/tmp/training_outputs.json', encoding='utf-8')).get('mlflow_run_id'); print('' if v is None else str(v))")
           LOCAL_RUN_ID=$(python -c "import json; print(json.load(open('/tmp/training_outputs.json', encoding='utf-8'))['local_run_id'])")
           MANIFEST_PATH=$(python -c "import json; print(json.load(open('/tmp/training_outputs.json', encoding='utf-8'))['manifest_path'])")
+          BUNDLE_PATH=$(python -c "import json; print(json.load(open('/tmp/training_outputs.json', encoding='utf-8')).get('bundle_path', ''))")
+          MLFLOW_RUN_ID=$(python -c "import json; v=json.load(open('/tmp/training_outputs.json', encoding='utf-8')).get('mlflow_run_id'); print('' if v is None else str(v))")
 
-          if [[ -z "$RUN_ID" || "$RUN_ID" == "None" || "$RUN_ID" == "null" ]]; then
-            echo "Training completed but no valid MLflow run ID was recorded"
-            cat /tmp/training_outputs.json
-            exit 1
-          fi
-
-          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "run_id=$LOCAL_RUN_ID" >> $GITHUB_OUTPUT
           echo "local_run_id=$LOCAL_RUN_ID" >> $GITHUB_OUTPUT
           echo "manifest_path=$MANIFEST_PATH" >> $GITHUB_OUTPUT
+          echo "bundle_path=$BUNDLE_PATH" >> $GITHUB_OUTPUT
+          echo "mlflow_run_id=$MLFLOW_RUN_ID" >> $GITHUB_OUTPUT
 
       - name: Validate model performance
         id: validate
@@ -210,9 +208,8 @@ jobs:
         with:
           name: training-artifacts
           path: |
-            experiments/models/
+            experiments/runs/
             experiments/registry/
-            experiments/reports/
             /tmp/validation.json
             /tmp/training_outputs.json
           retention-days: 30

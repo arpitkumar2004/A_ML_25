@@ -99,11 +99,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin "${{ github.ref_name }}"
+          git pull --rebase --autostash origin "${{ github.ref_name }}"
           git add experiments/registry
-          if [[ -f "experiments/models/${{ github.event.inputs.run_id }}/manifest.json" ]]; then
-            git add "experiments/models/${{ github.event.inputs.run_id }}/manifest.json"
-          fi
           if git diff --cached --quiet; then
             echo "No promotion state changes to commit"
           else
@@ -137,7 +134,7 @@ jobs:
 
   post-promotion:
     needs: [promote]
-    if: always()
+    if: needs.promote.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -154,15 +151,18 @@ jobs:
         run: |
           python scripts/update_deployment_manifest.py \
             --run-id "${{ github.event.inputs.run_id }}" \
-            --stage "${{ github.event.inputs.target_stage }}" \
-            --manifest-path experiments/registry/deployment_manifest.json
+            --strategy promotion \
+            --manifest-path experiments/registry/deployment_manifest.json \
+            --status promoted \
+            --deployed-by "${{ github.actor }}" \
+            --deployment-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
       - name: Persist deployment manifest
         if: github.event.inputs.target_stage == 'production'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin "${{ github.ref_name }}"
+          git pull --rebase --autostash origin "${{ github.ref_name }}"
           git add experiments/registry/deployment_manifest.json
           if git diff --cached --quiet; then
             echo "No deployment manifest changes to commit"
