@@ -33,6 +33,7 @@ def register_run(
     registry_dir: str = "experiments/registry",
     status: Optional[str] = None,
     tracking: Optional[Dict[str, Any]] = None,
+    bundle_path: Optional[str] = None,
 ) -> str:
     os.makedirs(registry_dir, exist_ok=True)
     idx = _load_index(registry_dir)
@@ -48,6 +49,7 @@ def register_run(
                     "stage": stage,
                     "status": r.get("status", default_status),
                     "tracking": tracking or r.get("tracking", {}),
+                    "bundle_path": bundle_path or r.get("bundle_path"),
                     "updated_utc": _utc_now(),
                 }
             )
@@ -62,6 +64,7 @@ def register_run(
                 "stage": stage,
                 "status": default_status,
                 "tracking": tracking or {},
+                "bundle_path": bundle_path,
                 "created_utc": _utc_now(),
                 "updated_utc": _utc_now(),
             }
