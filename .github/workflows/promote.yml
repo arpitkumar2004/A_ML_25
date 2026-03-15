@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: 'MLflow run ID to promote'
+        description: 'Canonical local run ID to promote'
         required: true
       target_stage:
         description: 'Target stage (staging -> production)'
