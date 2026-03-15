@@ -1,6 +1,7 @@
 # src/pipelines/train_pipeline.py
 import os
 import time
+from copy import deepcopy
 from typing import Dict, Any, Optional
 import numpy as np
 import pandas as pd
@@ -20,6 +21,7 @@ from ..utils.run_registry import make_run_id, write_run_manifest
 from ..registry.model_registry import register_run
 from ..utils.mlflow_utils import MLflowTracker, mlflow_link
 from ..utils.column_aliases import resolve_column_name
+from ..utils.model_bundle import ensure_bundle_layout, copy_file_if_exists, copy_tree_contents
 
 # Because this is giving error at this time
 try:
@@ -48,6 +50,44 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
     """
     # prepare directories
     run_id = cfg.get("run_id") or make_run_id(prefix="train")
+    experiments_dir = cfg.get("experiments_dir", "experiments")
+    bundle = ensure_bundle_layout(run_id=run_id, experiments_dir=experiments_dir)
+    cfg = deepcopy(cfg)
+    cfg["run_id"] = run_id
+    cfg["bundle_path"] = bundle["bundle_path"]
+
+    text_cfg = dict(cfg.get("text_cfg", {}) or {})
+    text_cfg.setdefault("method", "sbert")
+    text_cfg.setdefault("model_name", "all-MiniLM-L6-v2")
+    text_cfg.setdefault("cache_path", "data/processed/text_embeddings.joblib")
+    text_cfg.setdefault("vectorizer_path", "data/processed/tfidf_vectorizer.joblib")
+    cfg["text_cfg"] = text_cfg
+
+    image_cfg = dict(cfg.get("image_cfg", {}) or {})
+    image_cfg.setdefault("cache_path", "data/processed/image_embeddings.joblib")
+    cfg["image_cfg"] = image_cfg
+
+    numeric_cfg = dict(cfg.get("numeric_cfg", {}) or {})
+    numeric_cfg.setdefault("scaler_path", "data/processed/numeric_scaler.joblib")
+    cfg["numeric_cfg"] = numeric_cfg
+
+    selector_cfg = dict(cfg.get("selector_cfg", {}) or {})
+    selector_cfg.setdefault("save_path", "data/processed/feature_selector.joblib")
+    cfg["selector_cfg"] = selector_cfg
+
+    post_log_cfg = dict(cfg.get("post_log_cfg", {}) or {})
+    post_log_cfg.setdefault("save_path", "data/processed/post_feature_log_transform.joblib")
+    cfg["post_log_cfg"] = post_log_cfg
+
+    cfg["models_out"] = cfg.get("models_out") or bundle["models_dir"]
+    cfg["oof_out"] = cfg.get("oof_out") or bundle["oof_dir"]
+    cfg["reports_dir"] = cfg.get("reports_dir") or bundle["reports_dir"]
+    cfg["report_out"] = cfg.get("report_out") or bundle["model_report_joblib"]
+    cfg["report_csv"] = cfg.get("report_csv") or bundle["model_report_csv"]
+    cfg["dim_meta_out"] = cfg.get("dim_meta_out") or bundle["dim_meta_path"]
+    cfg["feature_cache"] = cfg.get("feature_cache") or bundle["feature_cache"]
+    cfg["dim_cache"] = cfg.get("dim_cache") or bundle["dim_cache"]
+
     timings = {}
     t0_total = time.perf_counter()
     tracker = MLflowTracker(cfg=cfg, stage="train", run_id=run_id)
@@ -56,8 +96,9 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
     tracker.set_tags({"selected_model_filter": model_name or "all"})
 
     os.makedirs(cfg.get("experiments_dir", "experiments"), exist_ok=True)
-    os.makedirs(cfg.get("models_out", "experiments/models"), exist_ok=True)
-    os.makedirs(cfg.get("oof_out", "experiments/oof"), exist_ok=True)
+    os.makedirs(cfg["models_out"], exist_ok=True)
+    os.makedirs(cfg["oof_out"], exist_ok=True)
+    os.makedirs(cfg["reports_dir"], exist_ok=True)
 
     try:
         # 1. Load data (optionally sample small fraction for quick dev)
@@ -129,12 +170,12 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
         # 4. Build features (text + image + numeric + optional selection)
         t_features = time.perf_counter()
         fb = FeatureBuilder(
-            cfg.get("text_cfg", {}),
-            cfg.get("image_cfg", {}),
-            cfg.get("numeric_cfg", {}),
-            selector_cfg=cfg.get("selector_cfg", {}),
-            post_log_cfg=cfg.get("post_log_cfg", {}),
-            output_cache=cfg.get("feature_cache", "data/processed/features.joblib"),
+            cfg["text_cfg"],
+            cfg["image_cfg"],
+            cfg["numeric_cfg"],
+            selector_cfg=cfg["selector_cfg"],
+            post_log_cfg=cfg["post_log_cfg"],
+            output_cache=cfg["feature_cache"],
         )
         X_raw, meta = fb.build(
             df,
@@ -159,18 +200,18 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
 
         # 5. Dimensionality reduction
         t_dim = time.perf_counter()
-        reducer = DimReducer(method=cfg.get("dim_method", "umap"), n_components=cfg.get("dim_components", 50), cache_path=cfg.get("dim_cache", "data/processed/dimred.joblib"))
+        reducer = DimReducer(method=cfg.get("dim_method", "umap"), n_components=cfg.get("dim_components", 50), cache_path=cfg["dim_cache"])
         if X_dense is not None:
             X_final, dim_meta = reducer.fit_transform(X_dense, use_cache=cfg.get("use_dim_cache", True), fingerprint=meta.get("feature_fingerprint"))
         else:
             X_final = X_raw  # sparse, fall back
             dim_meta = {}
-        IO.save_pickle(dim_meta, cfg.get("dim_meta_out", "experiments/reports/dim_meta.joblib"))
+        IO.save_pickle(dim_meta, cfg["dim_meta_out"])
         timings["dimensionality"] = round(time.perf_counter() - t_dim, 4)
 
         # 7. Run CV for each model
         t_train = time.perf_counter()
-        trainer = Trainer(output_dir=cfg.get("models_out", "experiments/models"), n_splits=cfg.get("n_splits", 5), random_state=cfg.get("random_state", 42), stratify=cfg.get("stratify", False))
+        trainer = Trainer(output_dir=cfg["models_out"], n_splits=cfg.get("n_splits", 5), random_state=cfg.get("random_state", 42), stratify=cfg.get("stratify", False))
         results = []
         oof_list = []
         model_names = []
@@ -220,8 +261,8 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
             m = r["metrics"]
             rows.append({"model": r["name"], "rmse": m["rmse"], "mae": m["mae"], "r2": m["r2"], "smape": m["smape"]})
         df_report = pd.DataFrame(rows).sort_values("smape")
-        IO.save_pickle(df_report, cfg.get("report_out", "experiments/reports/model_comparison.joblib"))
-        df_report.to_csv(cfg.get("report_csv", "experiments/reports/model_comparison.csv"), index=False)
+        IO.save_pickle(df_report, cfg["report_out"])
+        df_report.to_csv(cfg["report_csv"], index=False)
         if not df_report.empty:
             best = df_report.iloc[0].to_dict()
             best_name = str(best.get("model", ""))
@@ -249,18 +290,18 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
         # 9. Save OOF matrix and model names for stacking
         if oof_list:
             OOF = np.hstack(oof_list)
-            IO.save_pickle(OOF, os.path.join(cfg.get("oof_out", "experiments/oof"), "oof_matrix.joblib"))
-            IO.save_pickle(np.array(model_names), os.path.join(cfg.get("oof_out", "experiments/oof"), "model_names.joblib"))
+            IO.save_pickle(OOF, os.path.join(cfg["oof_out"], "oof_matrix.joblib"))
+            IO.save_pickle(np.array(model_names), os.path.join(cfg["oof_out"], "model_names.joblib"))
             logger.info(f"Saved OOF matrix with shape {OOF.shape}")
             tracker.log_metrics({"oof_cols": OOF.shape[1], "oof_rows": OOF.shape[0]})
 
-        stacker_summary_path = os.path.join(cfg.get("reports_dir", "experiments/reports"), "stacker_summary.joblib")
+        stacker_summary_path = os.path.join(cfg["reports_dir"], "stacker_summary.joblib")
 
         # 10. Run Stacker (meta-level) if requested
         if cfg.get("run_stacker", True) and oof_list:
             # fit stacker on OOF
             meta_ooF = OOF
-            stacker = Stacker(method=cfg.get("stacker_method", "ridge"), params=cfg.get("stacker_params", {"alpha":1.0}), n_splits=cfg.get("stacker_n_splits", 5), save_path=os.path.join(cfg.get("models_out", "experiments/models"), "stacker.joblib"))
+            stacker = Stacker(method=cfg.get("stacker_method", "ridge"), params=cfg.get("stacker_params", {"alpha":1.0}), n_splits=cfg.get("stacker_n_splits", 5), save_path=os.path.join(cfg["models_out"], "stacker.joblib"))
             stacker_summary = stacker.fit_cv(meta_ooF, y, fit_final=True)
             IO.save_pickle(stacker_summary, stacker_summary_path)
             logger.info(f"Stacker finished. summary: {stacker_summary}")
@@ -273,18 +314,59 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
         timings["train_and_eval"] = round(time.perf_counter() - t_train, 4)
         timings["total"] = round(time.perf_counter() - t0_total, 4)
 
+        # Snapshot all runtime-critical artifacts into the immutable bundle.
+        copy_tree_contents(cfg["models_out"], bundle["models_dir"])
+        copy_file_if_exists(os.path.join(cfg["oof_out"], "oof_matrix.joblib"), bundle["oof_path"])
+        copy_file_if_exists(os.path.join(cfg["oof_out"], "model_names.joblib"), bundle["oof_meta_path"])
+        copy_file_if_exists(cfg["report_out"], bundle["model_report_joblib"])
+        copy_file_if_exists(cfg["report_csv"], bundle["model_report_csv"])
+        copy_file_if_exists(cfg["dim_meta_out"], bundle["dim_meta_path"])
+        copy_file_if_exists(stacker_summary_path, bundle["stacker_summary_path"])
+        copy_file_if_exists(cfg["dim_cache"], bundle["dim_cache"])
+        copy_file_if_exists(cfg["feature_cache"], bundle["feature_cache"])
+        copy_file_if_exists(cfg["selector_cfg"].get("save_path"), bundle["selector_path"])
+        copy_file_if_exists(cfg["numeric_cfg"].get("scaler_path"), bundle["numeric_scaler_path"])
+        copy_file_if_exists(cfg["post_log_cfg"].get("save_path"), bundle["post_log_transform_path"])
+        copy_file_if_exists(cfg["text_cfg"].get("vectorizer_path"), bundle["text_vectorizer_path"])
+        copy_file_if_exists(cfg["text_cfg"].get("cache_path"), bundle["text_embeddings_cache"])
+        copy_file_if_exists(cfg["image_cfg"].get("cache_path"), bundle["image_embeddings_cache"])
+        IO.save_json(cfg, bundle["config_path"], indent=2)
+
         manifest_outputs = {
-            "model_report": cfg.get("report_csv", "experiments/reports/model_comparison.csv"),
-            "oof_path": os.path.join(cfg.get("oof_out", "experiments/oof"), "oof_matrix.joblib"),
-            "dim_cache": cfg.get("dim_cache", "data/processed/dimred.joblib"),
-            "feature_cache": cfg.get("feature_cache", "data/processed/features.joblib"),
-            "selector_path": cfg.get("selector_cfg", {}).get("save_path", "data/processed/feature_selector.joblib"),
-            "numeric_scaler_path": cfg.get("numeric_cfg", {}).get("scaler_path", "data/processed/numeric_scaler.joblib"),
-            "stacker_summary": stacker_summary_path,
+            "model_report": bundle["model_report_csv"],
+            "oof_path": bundle["oof_path"],
+            "dim_cache": bundle["dim_cache"],
+            "feature_cache": bundle["feature_cache"],
+            "selector_path": bundle["selector_path"],
+            "numeric_scaler_path": bundle["numeric_scaler_path"],
+            "stacker_summary": bundle["stacker_summary_path"],
             "mlflow": mlflow_link(tracker.mlflow_run_id, tracker.tracking_uri, tracker.experiment_name),
             "model_registry": registry_meta,
+            "bundle": {
+                "bundle_path": bundle["bundle_path"],
+                "manifest_path": bundle["manifest_path"],
+                "config_path": bundle["config_path"],
+                "models_dir": bundle["models_dir"],
+                "oof_dir": bundle["oof_dir"],
+                "oof_meta_path": bundle["oof_meta_path"],
+                "reports_dir": bundle["reports_dir"],
+                "artifacts_dir": bundle["artifacts_dir"],
+                "stacker_path": bundle["stacker_path"],
+                "text_vectorizer_path": bundle["text_vectorizer_path"],
+                "post_log_transform_path": bundle["post_log_transform_path"],
+            },
         }
         manifest_path = write_run_manifest(
+            run_id=run_id,
+            stage="train",
+            cfg=cfg,
+            outputs=manifest_outputs,
+            timings=timings,
+            registry_dir=cfg.get("registry_dir", "experiments/registry"),
+            out_path=bundle["manifest_path"],
+        )
+        # Compatibility mirror for existing tools that still search registry manifests directly.
+        write_run_manifest(
             run_id=run_id,
             stage="train",
             cfg=cfg,
@@ -299,25 +381,27 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
             registry_dir=cfg.get("registry_dir", "experiments/registry"),
             status="staging",
             tracking={"mlflow": manifest_outputs.get("mlflow", {})},
+            bundle_path=bundle["bundle_path"],
         )
 
         tracker.log_metrics({f"timing.{k}": v for k, v in timings.items()})
         tracker.log_artifacts_if_exists(
             [
-                cfg.get("report_csv", "experiments/reports/model_comparison.csv"),
-                stacker_summary_path,
-                os.path.join(cfg.get("oof_out", "experiments/oof"), "model_names.joblib"),
+                bundle["model_report_csv"],
+                bundle["stacker_summary_path"],
+                bundle["oof_meta_path"],
                 manifest_path,
             ],
             artifact_path="artifacts",
         )
 
         summary = {
-            "model_report": cfg.get("report_csv", "experiments/reports/model_comparison.csv"),
-            "oof_path": os.path.join(cfg.get("oof_out", "experiments/oof"), "oof_matrix.joblib"),
+            "model_report": bundle["model_report_csv"],
+            "oof_path": bundle["oof_path"],
             "run_id": run_id,
             "mlflow_run_id": tracker.mlflow_run_id,
             "manifest_path": manifest_path,
+            "bundle_path": bundle["bundle_path"],
             "timings_seconds": timings,
         }
         tracker.end(status="FINISHED")
