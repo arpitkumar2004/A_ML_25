@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 import argparse
+from typing import Optional
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -17,7 +18,8 @@ if str(ROOT) not in sys.path:
 def register_model(
     run_id: str,
     stage: str = "staging",
-    tags: str = ""
+    tags: str = "",
+    bundle_path: Optional[str] = None,
 ) -> str:
     """
     Register model from MLflow run into local registry.
@@ -32,23 +34,40 @@ def register_model(
     """
     
     from src.registry.model_registry import register_run
+    from src.utils.registry_loader import RegistryLoader
     
     registry_dir = "experiments/registry"
     os.makedirs(registry_dir, exist_ok=True)
-    
-    manifest_path = f"experiments/models/{run_id}/manifest.json"
-    
-    # Create manifest if doesn't exist
-    if not os.path.exists(manifest_path):
-        os.makedirs(os.path.dirname(manifest_path), exist_ok=True)
-        manifest = {
-            "run_id": run_id,
-            "stage": stage,
-            "registered_at": datetime.utcnow().isoformat(),
-            "artifacts": []
-        }
-        with open(manifest_path, 'w') as f:
-            json.dump(manifest, f, indent=2)
+
+    loader = RegistryLoader(registry_dir=registry_dir)
+    existing = None
+    try:
+        existing = loader.get_run_by_id(run_id)
+    except Exception:
+        existing = None
+
+    manifest_path = ""
+    resolved_bundle_path = bundle_path
+    if existing is not None:
+        manifest_path = str(existing.get("manifest_path") or "")
+        resolved_bundle_path = resolved_bundle_path or existing.get("bundle_path")
+
+    if not manifest_path:
+        candidate_bundle_manifest = os.path.join("experiments", "runs", run_id, "bundle", "manifest.json")
+        if os.path.exists(candidate_bundle_manifest):
+            manifest_path = candidate_bundle_manifest
+            resolved_bundle_path = resolved_bundle_path or os.path.dirname(candidate_bundle_manifest)
+        else:
+            manifest_path = f"experiments/models/{run_id}/manifest.json"
+            os.makedirs(os.path.dirname(manifest_path), exist_ok=True)
+            manifest = {
+                "run_id": run_id,
+                "stage": stage,
+                "registered_at": datetime.utcnow().isoformat(),
+                "artifacts": []
+            }
+            with open(manifest_path, 'w') as f:
+                json.dump(manifest, f, indent=2)
     
     # Parse tags
     tag_dict = {}
@@ -63,10 +82,11 @@ def register_model(
     index_path = register_run(
         run_id=run_id,
         manifest_path=manifest_path,
-        stage="training",
+        stage="train",
         registry_dir=registry_dir,
         status=stage,
-        tracking=tag_dict
+        tracking=tag_dict,
+        bundle_path=resolved_bundle_path,
     )
     
     print(f"✓ Model {run_id} registered in {stage} stage")
@@ -75,16 +95,18 @@ def register_model(
 
 def main():
     parser = argparse.ArgumentParser(description="Register trained model")
-    parser.add_argument("--run-id", required=True, help="MLflow run ID")
+    parser.add_argument("--run-id", required=True, help="Canonical local run ID")
     parser.add_argument("--stage", default="staging", help="Initial stage")
     parser.add_argument("--tags", default="", help="Comma-separated tags")
+    parser.add_argument("--bundle-path", default="", help="Optional immutable bundle path")
     
     args = parser.parse_args()
     
     register_model(
         run_id=args.run_id,
         stage=args.stage,
-        tags=args.tags
+        tags=args.tags,
+        bundle_path=args.bundle_path or None,
     )
 
 
