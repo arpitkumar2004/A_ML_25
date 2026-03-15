@@ -14,6 +14,7 @@ from ..features.dimensionality import DimReducer
 from ..models.stacker import Stacker
 from ..models.base_model import BaseModel
 from ..utils.column_aliases import normalize_to_train_schema, resolve_column_name
+from ..utils.model_bundle import resolve_bundle_path, bundle_runtime_contract, load_bundle_manifest
 
 logger = LoggerFactory.get("predict")
 
@@ -32,21 +33,73 @@ class PredictPipeline:
                  numeric_cfg: Dict = None,
                  selector_cfg: Dict = None,
                  post_log_cfg: Dict = None,
-                 feature_cache: str = "data/processed/features.joblib",
-                 dim_cache: str = "data/processed/dimred.joblib",
-                 models_dir: str = "experiments/models",
-                 oof_meta_path: str = "experiments/oof/model_names.joblib",
-                 stacker_path: str = "experiments/models/stacker.joblib"):
-        self.text_cfg = text_cfg or {"method": "sbert", "cache_path":"data/processed/text_embeddings.joblib"}
-        self.image_cfg = image_cfg or {"cache_path":"data/processed/image_embeddings.joblib"}
-        self.numeric_cfg = numeric_cfg or {"scaler_path":"data/processed/numeric_scaler.joblib"}
-        self.selector_cfg = selector_cfg or {}
-        self.post_log_cfg = post_log_cfg or {}
-        self.feature_cache = feature_cache
-        self.dim_cache = dim_cache
-        self.models_dir = models_dir
-        self.oof_meta_path = oof_meta_path
-        self.stacker_path = stacker_path
+                 feature_cache: Optional[str] = None,
+                 dim_cache: Optional[str] = None,
+                 models_dir: Optional[str] = None,
+                 oof_meta_path: Optional[str] = None,
+                 stacker_path: Optional[str] = None,
+                 bundle_path: Optional[str] = None,
+                 run_id: Optional[str] = None,
+                 registry_dir: str = "experiments/registry"):
+        self.registry_dir = registry_dir
+        self.run_id = run_id
+        self.bundle_path = resolve_bundle_path(bundle_path=bundle_path, run_id=run_id, registry_dir=registry_dir, require_exists=False) if (bundle_path or run_id) else None
+
+        bundle_cfg: Dict[str, Any] = {}
+        bundle_contract: Dict[str, str] = {}
+        if self.bundle_path:
+            manifest = load_bundle_manifest(self.bundle_path)
+            bundle_cfg = manifest.get("config", {}) if isinstance(manifest, dict) else {}
+            bundle_contract = bundle_runtime_contract(self.bundle_path)
+
+        resolved_text_cfg = dict(bundle_cfg.get("text_cfg", {}) if isinstance(bundle_cfg.get("text_cfg", {}), dict) else {})
+        if text_cfg:
+            resolved_text_cfg.update(text_cfg)
+        resolved_text_cfg.setdefault("method", "sbert")
+        if self.bundle_path and "cache_path" not in resolved_text_cfg:
+            resolved_text_cfg["cache_path"] = None
+        else:
+            resolved_text_cfg.setdefault("cache_path", "data/processed/text_embeddings.joblib")
+        if bundle_contract.get("text_vectorizer_path"):
+            resolved_text_cfg["vectorizer_path"] = bundle_contract["text_vectorizer_path"]
+        else:
+            resolved_text_cfg.setdefault("vectorizer_path", "data/processed/tfidf_vectorizer.joblib")
+
+        resolved_image_cfg = dict(bundle_cfg.get("image_cfg", {}) if isinstance(bundle_cfg.get("image_cfg", {}), dict) else {})
+        if image_cfg:
+            resolved_image_cfg.update(image_cfg)
+        if self.bundle_path and "cache_path" not in resolved_image_cfg:
+            resolved_image_cfg["cache_path"] = None
+        else:
+            resolved_image_cfg.setdefault("cache_path", "data/processed/image_embeddings.joblib")
+
+        resolved_numeric_cfg = dict(bundle_cfg.get("numeric_cfg", {}) if isinstance(bundle_cfg.get("numeric_cfg", {}), dict) else {})
+        if numeric_cfg:
+            resolved_numeric_cfg.update(numeric_cfg)
+        resolved_numeric_cfg["scaler_path"] = bundle_contract.get("numeric_scaler_path") or resolved_numeric_cfg.get("scaler_path", "data/processed/numeric_scaler.joblib")
+
+        resolved_selector_cfg = dict(bundle_cfg.get("selector_cfg", {}) if isinstance(bundle_cfg.get("selector_cfg", {}), dict) else {})
+        if selector_cfg:
+            resolved_selector_cfg.update(selector_cfg)
+        if bundle_contract.get("selector_path"):
+            resolved_selector_cfg["save_path"] = bundle_contract["selector_path"]
+
+        resolved_post_log_cfg = dict(bundle_cfg.get("post_log_cfg", {}) if isinstance(bundle_cfg.get("post_log_cfg", {}), dict) else {})
+        if post_log_cfg:
+            resolved_post_log_cfg.update(post_log_cfg)
+        if bundle_contract.get("post_log_transform_path"):
+            resolved_post_log_cfg["save_path"] = bundle_contract["post_log_transform_path"]
+
+        self.text_cfg = resolved_text_cfg
+        self.image_cfg = resolved_image_cfg
+        self.numeric_cfg = resolved_numeric_cfg
+        self.selector_cfg = resolved_selector_cfg
+        self.post_log_cfg = resolved_post_log_cfg
+        self.feature_cache = feature_cache if self.bundle_path else (feature_cache or "data/processed/features.joblib")
+        self.dim_cache = bundle_contract.get("dim_cache") or dim_cache or "data/processed/dimred.joblib"
+        self.models_dir = bundle_contract.get("models_dir") or models_dir or "experiments/models"
+        self.oof_meta_path = bundle_contract.get("oof_meta_path") or oof_meta_path or "experiments/oof/model_names.joblib"
+        self.stacker_path = bundle_contract.get("stacker_path") or stacker_path or "experiments/models/stacker.joblib"
 
         # lazy attributes
         self._feature_builder = FeatureBuilder(
@@ -75,6 +128,8 @@ class PredictPipeline:
 
     def _discover_base_models(self):
         # Discover saved fold models in models_dir and build a mapping name -> list(paths)
+        if not os.path.isdir(self.models_dir):
+            raise FileNotFoundError(f"models_dir not found: {self.models_dir}")
         model_files = [f for f in os.listdir(self.models_dir) if f.endswith(".joblib") or f.endswith(".pkl")]
         # Supported formats:
         #  1) fold_{i}_{ModelName}.joblib
