@@ -40,3 +40,17 @@ class RegistryLoader:
         if not run_id:
             return None
         return self.get_run_by_id(run_id)
+
+    def get_bundle_path_for_run(self, run_id: str) -> Optional[str]:
+        entry = self.get_run_by_id(run_id)
+        if entry is None:
+            return None
+        bundle_path = entry.get("bundle_path")
+        return str(bundle_path) if bundle_path else None
+
+    def get_active_production_bundle_path(self) -> Optional[str]:
+        entry = self.get_active_production_entry()
+        if entry is None:
+            return None
+        bundle_path = entry.get("bundle_path")
+        return str(bundle_path) if bundle_path else None
