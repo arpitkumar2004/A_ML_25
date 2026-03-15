@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.validation.slo_validator import SLOValidator
+from src.utils.registry_loader import RegistryLoader
 
 
 def validate_promotion(
@@ -39,16 +40,28 @@ def validate_promotion(
         "passed": False,
         "metrics": {},
         "failures": [],
-        "warnings": []
+        "warnings": [],
+        "resolved_mlflow_run_id": None,
     }
     
     try:
         import mlflow
-        
+
+        mlflow_run_id = run_id
+        try:
+            entry = RegistryLoader().get_run_by_id(run_id)
+        except Exception:
+            entry = None
+        if entry:
+            tracking = entry.get("tracking", {}) if isinstance(entry.get("tracking", {}), dict) else {}
+            mlflow_meta = tracking.get("mlflow", {}) if isinstance(tracking.get("mlflow", {}), dict) else {}
+            mlflow_run_id = str(mlflow_meta.get("mlflow_run_id") or run_id)
+        result["resolved_mlflow_run_id"] = mlflow_run_id
+
         # Load metrics from MLflow
-        run = mlflow.get_run(run_id)
+        run = mlflow.get_run(mlflow_run_id)
         if not run:
-            result["failures"].append(f"Run {run_id} not found in MLflow")
+            result["failures"].append(f"Run {mlflow_run_id} not found in MLflow")
             return result
         
         metrics = run.data.metrics or {}
@@ -114,7 +127,7 @@ def validate_promotion(
 
 def main():
     parser = argparse.ArgumentParser(description="Validate model for promotion")
-    parser.add_argument("--run-id", required=True, help="MLflow run ID")
+    parser.add_argument("--run-id", required=True, help="Canonical local run ID")
     parser.add_argument("--target-stage", required=True, help="Target stage")
     parser.add_argument("--output", required=True, help="Output JSON file")
     parser.add_argument("--min-accuracy", type=float, default=None)
