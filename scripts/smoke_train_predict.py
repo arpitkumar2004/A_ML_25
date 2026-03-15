@@ -95,15 +95,8 @@ def main() -> None:
     df_parsed = Parser.add_parsed_features(df_raw.copy(), text_col="Description")
 
     pp = PredictPipeline(
-        text_cfg=train_cfg["text_cfg"],
-        image_cfg=train_cfg["image_cfg"],
-        numeric_cfg=train_cfg["numeric_cfg"],
-        selector_cfg=train_cfg["selector_cfg"],
-        feature_cache=feature_cache,
-        dim_cache=dim_cache,
-        models_dir=train_cfg["models_out"],
-        oof_meta_path=f"{base_dir}/oof/model_names.joblib",
-        stacker_path=f"{base_dir}/models/stacker.joblib",
+        bundle_path=summary.get("bundle_path"),
+        registry_dir=train_cfg["registry_dir"],
     )
 
     X_inf, meta_inf = pp._feature_builder.build(
@@ -148,11 +141,7 @@ def main() -> None:
         "image_cfg": train_cfg["image_cfg"],
         "numeric_cfg": train_cfg["numeric_cfg"],
         "selector_cfg": train_cfg["selector_cfg"],
-        "feature_cache": feature_cache,
-        "dim_cache": dim_cache,
-        "models_dir": train_cfg["models_out"],
-        "oof_meta_path": f"{base_dir}/oof/model_names.joblib",
-        "stacker_path": f"{base_dir}/models/stacker.joblib",
+        "bundle_path": summary.get("bundle_path"),
         "registry_dir": f"{base_dir}/registry",
         "latency_log_path": f"{base_dir}/monitoring/latency_events.jsonl",
     }
@@ -167,6 +156,7 @@ def main() -> None:
             "selector_exists": os.path.exists(selector_path),
             "dim_exists": os.path.exists(dim_cache),
             "train_manifest_exists": os.path.exists(summary.get("manifest_path", "")),
+            "bundle_manifest_exists": os.path.exists(os.path.join(summary.get("bundle_path", ""), "manifest.json")),
             "infer_manifest_exists": os.path.exists(f"{base_dir}/registry/smoke_infer_inference_manifest.json"),
             "latency_log_exists": os.path.exists(f"{base_dir}/monitoring/latency_events.jsonl"),
         },
