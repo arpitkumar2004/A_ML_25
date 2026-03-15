@@ -25,6 +25,7 @@ def write_run_manifest(
     outputs: Dict[str, Any],
     timings: Optional[Dict[str, float]] = None,
     registry_dir: str = "experiments/registry",
+    out_path: Optional[str] = None,
 ) -> str:
     os.makedirs(registry_dir, exist_ok=True)
     seed = cfg.get("seed", cfg.get("random_state", cfg.get("trainer", {}).get("random_state"))) if isinstance(cfg, dict) else None
@@ -41,9 +42,9 @@ def write_run_manifest(
         "outputs": outputs,
         "timings_seconds": timings or {},
     }
-    out_path = os.path.join(registry_dir, f"{run_id}_{stage}_manifest.json")
-    IO.save_json(manifest, out_path, indent=2)
-    return out_path
+    manifest_path = out_path or os.path.join(registry_dir, f"{run_id}_{stage}_manifest.json")
+    IO.save_json(manifest, manifest_path, indent=2)
+    return manifest_path
 
 
 def append_jsonl(path: str, record: Dict[str, Any]) -> None:
