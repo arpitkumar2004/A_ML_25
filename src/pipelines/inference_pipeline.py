@@ -55,11 +55,14 @@ def run_inference_pipeline(cfg: Dict[str, Any]) -> str:
             numeric_cfg=cfg.get("numeric_cfg"),
             selector_cfg=cfg.get("selector_cfg"),
             post_log_cfg=cfg.get("post_log_cfg"),
-            feature_cache=cfg.get("feature_cache", "data/processed/features.joblib"),
-            dim_cache=cfg.get("dim_cache", "data/processed/dimred.joblib"),
-            models_dir=cfg.get("models_dir", "experiments/models"),
-            oof_meta_path=cfg.get("oof_meta_path", "experiments/oof/model_names.joblib"),
-            stacker_path=cfg.get("stacker_path", "experiments/models/stacker.joblib")
+            feature_cache=cfg.get("feature_cache"),
+            dim_cache=cfg.get("dim_cache"),
+            models_dir=cfg.get("models_dir"),
+            oof_meta_path=cfg.get("oof_meta_path"),
+            stacker_path=cfg.get("stacker_path"),
+            bundle_path=cfg.get("bundle_path"),
+            run_id=cfg.get("model_run_id"),
+            registry_dir=cfg.get("registry_dir", "experiments/registry"),
         )
         timings["pipeline_init"] = round(time.perf_counter() - t_init, 4)
 
@@ -99,14 +102,15 @@ def run_inference_pipeline(cfg: Dict[str, Any]) -> str:
 
         manifest_outputs = {
             "output_path": out_path,
-            "models_dir": cfg.get("models_dir", "experiments/models"),
-            "feature_cache": cfg.get("feature_cache", "data/processed/features.joblib"),
-            "dim_cache": cfg.get("dim_cache", "data/processed/dimred.joblib"),
-            "selector_path": cfg.get("selector_cfg", {}).get("save_path", "data/processed/feature_selector.joblib"),
+            "models_dir": pp.models_dir,
+            "feature_cache": pp.feature_cache,
+            "dim_cache": pp.dim_cache,
+            "selector_path": pp.selector_cfg.get("save_path", cfg.get("selector_cfg", {}).get("save_path", "data/processed/feature_selector.joblib")),
             "latency_log_path": cfg.get("latency_log_path", "experiments/monitoring/latency_events.jsonl"),
             "rows": n_rows,
             "data_quality": dq_result,
             "mlflow": mlflow_link(tracker.mlflow_run_id, tracker.tracking_uri, tracker.experiment_name),
+            "bundle_path": pp.bundle_path,
         }
         manifest_path = write_run_manifest(
             run_id=run_id,
