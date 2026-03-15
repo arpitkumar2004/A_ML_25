@@ -17,6 +17,8 @@ from ..inference.postprocess import Postprocessor
 from ..utils.logging_utils import LoggerFactory
 from ..monitoring.data_quality import validate_batch_quality
 from ..utils.io import IO
+from ..utils.registry_loader import RegistryLoader
+from ..utils.model_bundle import resolve_bundle_path, validate_bundle
 
 logger = LoggerFactory.get("serving_app")
 
@@ -78,9 +80,29 @@ class ModelService:
         self.canary_enabled: bool = False
         self.canary_percent: float = 0.0
         self.compare_canary: bool = False
+        self.registry_dir: str = "experiments/registry"
+        self.primary_run_id: Optional[str] = None
+        self.primary_bundle_path: Optional[str] = None
+        self.canary_run_id: Optional[str] = None
+        self.canary_bundle_path: Optional[str] = None
 
     @staticmethod
-    def _build_pipeline(models_dir: str) -> PredictPipeline:
+    def _build_pipeline(models_dir: Optional[str] = None, bundle_path: Optional[str] = None, registry_dir: str = "experiments/registry") -> PredictPipeline:
+        if bundle_path:
+            return PredictPipeline(
+                text_cfg={"cache_path": None},
+                image_cfg={
+                    "cache_path": None,
+                    "model_name": os.getenv("CLIP_MODEL_NAME", "openai/clip-vit-base-patch32"),
+                    "batch_size": int(os.getenv("IMAGE_BATCH_SIZE", "16")),
+                    "lazy_init": True,
+                },
+                bundle_path=bundle_path,
+                registry_dir=registry_dir,
+            )
+
+        if not models_dir:
+            raise ValueError("models_dir or bundle_path must be provided")
         base_dir = os.path.dirname(models_dir.rstrip("/\\"))
         text_method = os.getenv("TEXT_METHOD", "tfidf").lower()
         tfidf_vectorizer_path = os.getenv(
@@ -139,50 +161,126 @@ class ModelService:
         return bool(model_files)
 
     def initialize(self):
-        models_dir = os.getenv("MODELS_DIR", "experiments/models")
-        base_dir = os.path.dirname(models_dir.rstrip("/\\"))
-        text_method = os.getenv("TEXT_METHOD", "tfidf").lower()
-        tfidf_vectorizer_path = os.getenv("TFIDF_VECTORIZER_PATH", os.path.join(base_dir, "data", "tfidf_vectorizer.joblib"))
-        numeric_scaler_path = os.getenv("NUMERIC_SCALER_PATH", os.path.join(base_dir, "data", "numeric_scaler.joblib"))
-        selector_path = os.getenv("FEATURE_SELECTOR_PATH", os.path.join(base_dir, "data", "feature_selector.joblib"))
-        selector_enabled_env = os.getenv("SELECTOR_ENABLED", "auto").strip().lower()
-        selector_enabled = (os.path.exists(selector_path) if selector_enabled_env == "auto" else selector_enabled_env == "true")
+        registry_dir = os.getenv("REGISTRY_DIR", "experiments/registry")
+        self.registry_dir = registry_dir
+        bundle_path = os.getenv("MODEL_BUNDLE_PATH", "").strip()
+        configured_run_id = os.getenv("MODEL_RUN_ID", "").strip()
 
-        # TF-IDF serving needs a pre-fitted vectorizer artifact from training.
-        if text_method == "tfidf" and not os.path.exists(tfidf_vectorizer_path):
-            self.ready = False
-            self.ready_reason = f"missing_tfidf_vectorizer:{tfidf_vectorizer_path}"
-            return
+        if not bundle_path:
+            run_id = configured_run_id
+            if not run_id:
+                try:
+                    run_id = RegistryLoader(registry_dir=registry_dir).get_active_production_run_id() or ""
+                except Exception:
+                    run_id = ""
+            if run_id:
+                try:
+                    bundle_path = resolve_bundle_path(run_id=run_id, registry_dir=registry_dir) or ""
+                except Exception as exc:
+                    self.ready = False
+                    self.ready_reason = f"bundle_resolution_failed:{exc}"
+                    return
 
-        if not os.path.exists(numeric_scaler_path):
-            self.ready = False
-            self.ready_reason = f"missing_numeric_scaler:{numeric_scaler_path}"
-            return
+        if bundle_path:
+            validation = validate_bundle(bundle_path)
+            if not validation["valid"]:
+                self.ready = False
+                self.ready_reason = ";".join(validation["problems"])
+                return
+            self.pipeline = self._build_pipeline(bundle_path=bundle_path, registry_dir=registry_dir)
+            self.primary_bundle_path = bundle_path
+            self.primary_run_id = configured_run_id or None
+        else:
+            models_dir = os.getenv("MODELS_DIR", "experiments/models")
+            base_dir = os.path.dirname(models_dir.rstrip("/\\"))
+            text_method = os.getenv("TEXT_METHOD", "tfidf").lower()
+            tfidf_vectorizer_path = os.getenv("TFIDF_VECTORIZER_PATH", os.path.join(base_dir, "data", "tfidf_vectorizer.joblib"))
+            numeric_scaler_path = os.getenv("NUMERIC_SCALER_PATH", os.path.join(base_dir, "data", "numeric_scaler.joblib"))
+            selector_path = os.getenv("FEATURE_SELECTOR_PATH", os.path.join(base_dir, "data", "feature_selector.joblib"))
+            selector_enabled_env = os.getenv("SELECTOR_ENABLED", "auto").strip().lower()
+            selector_enabled = (os.path.exists(selector_path) if selector_enabled_env == "auto" else selector_enabled_env == "true")
 
-        if selector_enabled and not os.path.exists(selector_path):
-            self.ready = False
-            self.ready_reason = f"missing_feature_selector:{selector_path}"
-            return
+            if text_method == "tfidf" and not os.path.exists(tfidf_vectorizer_path):
+                self.ready = False
+                self.ready_reason = f"missing_tfidf_vectorizer:{tfidf_vectorizer_path}"
+                return
 
-        if not self._has_fold_models(models_dir):
-            self.ready = False
-            self.ready_reason = f"no_fold_model_artifacts_in:{models_dir}"
-            return
+            if not os.path.exists(numeric_scaler_path):
+                self.ready = False
+                self.ready_reason = f"missing_numeric_scaler:{numeric_scaler_path}"
+                return
 
-        self.pipeline = self._build_pipeline(models_dir)
+            if selector_enabled and not os.path.exists(selector_path):
+                self.ready = False
+                self.ready_reason = f"missing_feature_selector:{selector_path}"
+                return
+
+            if not self._has_fold_models(models_dir):
+                self.ready = False
+                self.ready_reason = f"no_fold_model_artifacts_in:{models_dir}"
+                return
+
+            self.pipeline = self._build_pipeline(models_dir=models_dir, registry_dir=registry_dir)
+            self.primary_bundle_path = None
+            self.primary_run_id = configured_run_id or None
+
+        if self.primary_bundle_path and not self.primary_run_id:
+            try:
+                loader = RegistryLoader(registry_dir=registry_dir)
+                for entry in loader.list_runs():
+                    if entry.get("bundle_path") == self.primary_bundle_path and entry.get("run_id"):
+                        self.primary_run_id = str(entry.get("run_id"))
+                        break
+            except Exception:
+                self.primary_run_id = None
+
+        canary_bundle = os.getenv("CANARY_BUNDLE_PATH", "").strip()
+        canary_run_id = os.getenv("CANARY_RUN_ID", "").strip()
+        if not canary_bundle and canary_run_id:
+            try:
+                canary_bundle = resolve_bundle_path(run_id=canary_run_id, registry_dir=registry_dir) or ""
+            except Exception:
+                canary_bundle = ""
 
         canary_dir = os.getenv("CANARY_MODELS_DIR", "").strip()
         self.canary_percent = float(os.getenv("CANARY_PERCENT", "0"))
         self.compare_canary = os.getenv("CANARY_COMPARE", "false").strip().lower() == "true"
-        self.canary_enabled = bool(canary_dir) and self.canary_percent > 0 and self._has_fold_models(canary_dir)
-        if self.canary_enabled:
-            self.canary_pipeline = self._build_pipeline(canary_dir)
-            logger.info("Canary enabled: dir=%s percent=%s", canary_dir, self.canary_percent)
+        if canary_bundle:
+            validation = validate_bundle(canary_bundle)
+            self.canary_enabled = validation["valid"] and self.canary_percent > 0
+            if self.canary_enabled:
+                self.canary_pipeline = self._build_pipeline(bundle_path=canary_bundle, registry_dir=registry_dir)
+                self.canary_bundle_path = canary_bundle
+                self.canary_run_id = canary_run_id or None
+                logger.info("Canary enabled via bundle: path=%s percent=%s", canary_bundle, self.canary_percent)
+            else:
+                self.canary_pipeline = None
+                self.canary_bundle_path = None
+                self.canary_run_id = None
         else:
-            self.canary_pipeline = None
+            self.canary_enabled = bool(canary_dir) and self.canary_percent > 0 and self._has_fold_models(canary_dir)
+            if self.canary_enabled:
+                self.canary_pipeline = self._build_pipeline(models_dir=canary_dir, registry_dir=registry_dir)
+                self.canary_bundle_path = None
+                self.canary_run_id = canary_run_id or None
+                logger.info("Canary enabled: dir=%s percent=%s", canary_dir, self.canary_percent)
+            else:
+                self.canary_pipeline = None
+                self.canary_bundle_path = None
+                self.canary_run_id = None
+
+        if self.canary_bundle_path and not self.canary_run_id:
+            try:
+                loader = RegistryLoader(registry_dir=registry_dir)
+                for entry in loader.list_runs():
+                    if entry.get("bundle_path") == self.canary_bundle_path and entry.get("run_id"):
+                        self.canary_run_id = str(entry.get("run_id"))
+                        break
+            except Exception:
+                self.canary_run_id = None
 
         self.ready = True
-        self.ready_reason = "ok"
+        self.ready_reason = f"ok:bundle={bundle_path}" if bundle_path else "ok:legacy_models_dir"
 
     def choose_pipeline(self) -> (PredictPipeline, str):
         if self.pipeline is None:
@@ -197,6 +295,22 @@ class ModelService:
             raise RuntimeError("pipeline_not_initialized")
         self.pipeline._discover_base_models()
         self.pipeline._load_stacker()
+
+    def deployment_state(self) -> Dict[str, Any]:
+        return {
+            "ready": self.ready,
+            "reason": self.ready_reason,
+            "registry_dir": self.registry_dir,
+            "run_id": self.primary_run_id,
+            "bundle_path": self.primary_bundle_path,
+            "canary": {
+                "enabled": self.canary_enabled,
+                "percent": self.canary_percent,
+                "compare": self.compare_canary,
+                "run_id": self.canary_run_id,
+                "bundle_path": self.canary_bundle_path,
+            },
+        }
 
 
 service = ModelService()
@@ -392,7 +506,8 @@ def root():
 
 @app.get("/healthz")
 def healthz():
-    return {"status": "ok"}
+    state = service.deployment_state()
+    return {"status": "ok" if state["ready"] else "degraded", "service": state}
 
 
 @app.get("/metrics/json")
@@ -405,6 +520,7 @@ def metrics_json():
         "request_count": int(_SERVICE_METRICS["request_count"]),
         "error_count": int(_SERVICE_METRICS["error_count"]),
         "predict_count": int(_SERVICE_METRICS["predict_count"]),
+        "service": service.deployment_state(),
         "latency_ms": {"p50": p50, "p95": p95, "p99": p99},
         "canary": {
             "enabled": bool(service.canary_enabled),
@@ -426,7 +542,7 @@ def metrics():
     p95 = float(np.percentile(lat, 95)) if lat.size else 0.0
     p99 = float(np.percentile(lat, 99)) if lat.size else 0.0
 
-    model_run_id = os.getenv("MODEL_RUN_ID", "unknown")
+    model_run_id = service.primary_run_id or os.getenv("MODEL_RUN_ID", "unknown")
     model_version = os.getenv("MODEL_VERSION", "unknown")
     rows = max(int(_SERVICE_METRICS["predict_rows"]), 1)
     fallback_image_rate = float(_SERVICE_METRICS["fallback_image_rows"]) / rows
@@ -457,11 +573,16 @@ def metrics():
     return HTMLResponse(content=body, media_type="text/plain; version=0.0.4")
 
 
+@app.get("/service/info")
+def service_info():
+    return service.deployment_state()
+
+
 @app.get("/readyz")
 def readyz():
     if service.ready:
-        return {"ready": True, "reason": service.ready_reason}
-    raise HTTPException(status_code=503, detail={"ready": False, "reason": service.ready_reason})
+        return service.deployment_state()
+    raise HTTPException(status_code=503, detail=service.deployment_state())
 
 
 @app.post("/v1/warmup")
