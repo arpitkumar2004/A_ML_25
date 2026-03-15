@@ -35,18 +35,27 @@ def promote_model(
     """
     
     from src.registry.model_registry import promote_run, register_run
+    from src.utils.registry_loader import RegistryLoader
     
     registry_dir = "experiments/registry"
     os.makedirs(registry_dir, exist_ok=True)
     
     try:
+        existing = None
+        try:
+            existing = RegistryLoader(registry_dir=registry_dir).get_run_by_id(run_id)
+        except Exception:
+            existing = None
+
         # First ensure run is registered if not already
-        manifest_path = f"experiments/models/{run_id}/manifest.json"
+        manifest_path = str(existing.get("manifest_path")) if existing and existing.get("manifest_path") else f"experiments/models/{run_id}/manifest.json"
+        bundle_path = str(existing.get("bundle_path")) if existing and existing.get("bundle_path") else None
         register_run(
             run_id=run_id,
             manifest_path=manifest_path,
             stage="promotion",
             registry_dir=registry_dir,
+            bundle_path=bundle_path,
             tracking={
                 "promoted_by": promoted_by,
                 "promotion_time": datetime.utcnow().isoformat(),
@@ -83,7 +92,7 @@ def promote_model(
 
 def main():
     parser = argparse.ArgumentParser(description="Promote model to target stage")
-    parser.add_argument("--run-id", required=True, help="MLflow run ID")
+    parser.add_argument("--run-id", required=True, help="Canonical local run ID")
     parser.add_argument("--target-stage", required=True, help="Target stage")
     parser.add_argument("--promoted-by", default="automation", help="User promoting model")
     parser.add_argument("--promotion-url", default="", help="Promotion workflow URL")
