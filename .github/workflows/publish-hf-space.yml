@@ -1,0 +1,82 @@
+name: Publish Hugging Face Space
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Canonical local run ID to package for Hugging Face Space'
+        required: true
+      space_repo_id:
+        description: 'Target Hugging Face Space repo ID'
+        required: true
+        default: 'arpitkumariitkgp/aml25'
+      create_if_missing:
+        description: 'Create the Space if it does not already exist'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  publish-space:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Setup Python and dependencies
+        uses: ./.github/actions/python-setup
+
+      - name: Create Hugging Face Space package
+        run: |
+          python scripts/create_hf_space_package.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --output-dir /tmp/hf-space-package \
+            --space-repo-id "${{ github.event.inputs.space_repo_id }}" \
+            --service-image "hf-space:${{ github.event.inputs.run_id }}"
+
+      - name: Upload generated Space package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hf-space-package-${{ github.event.inputs.run_id }}
+          path: /tmp/hf-space-package
+          retention-days: 14
+
+      - name: Publish package to Hugging Face Space
+        env:
+          HF_SPACE_TOKEN: ${{ secrets.HF_SPACE_TOKEN }}
+        run: |
+          EXTRA_ARGS=""
+          if [ "${{ github.event.inputs.create_if_missing }}" = "true" ]; then
+            EXTRA_ARGS="--create-if-missing"
+          fi
+          python scripts/publish_to_hf_space.py \
+            --package-dir /tmp/hf-space-package \
+            --space-repo-id "${{ github.event.inputs.space_repo_id }}" \
+            --token "$HF_SPACE_TOKEN" \
+            --commit-message "Deploy run ${{ github.event.inputs.run_id }} to Hugging Face Space" \
+            $EXTRA_ARGS
+
+      - name: Verify Space live service
+        run: |
+          SPACE_URL="https://$(echo '${{ github.event.inputs.space_repo_id }}' | tr '/' '-').hf.space"
+          python scripts/wait_for_live_service.py \
+            --service-base-url "$SPACE_URL" \
+            --expected-run-id "${{ github.event.inputs.run_id }}" \
+            --timeout-seconds 900 \
+            --interval-seconds 20 \
+            --output /tmp/hf-space-health.json
+
+      - name: Upload Space health result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hf-space-health-${{ github.event.inputs.run_id }}
+          path: /tmp/hf-space-health.json
+          if-no-files-found: ignore
+          retention-days: 7
