@@ -329,6 +329,21 @@
       "bundle_path": "experiments/runs/train_20260315T123659Z/bundle",
       "created_utc": "2026-03-15T12:40:54.256051+00:00",
       "updated_utc": "2026-03-15T12:41:04.342214+00:00"
+    },
+    {
+      "run_id": "c886037069ed455ea1368f87d76b1d48",
+      "manifest_path": "experiments/models/c886037069ed455ea1368f87d76b1d48/manifest.json",
+      "stage": "promotion",
+      "status": "staging",
+      "tracking": {
+        "promoted_by": "arpitkumar2004",
+        "promotion_time": "2026-03-15T13:20:31.028160",
+        "promotion_url": "https://github.com/arpitkumar2004/A_ML_25/actions/runs/23111114436",
+        "target_stage": "staging"
+      },
+      "bundle_path": null,
+      "created_utc": "2026-03-15T13:20:31.028319+00:00",
+      "updated_utc": "2026-03-15T13:20:31.029057+00:00"
     }
   ],
   "active_production_run_id": null
