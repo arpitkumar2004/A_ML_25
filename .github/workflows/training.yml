@@ -180,7 +180,7 @@ jobs:
         if: steps.validate.outputs.validation_passed == 'true'
         run: |
           python scripts/register_model.py \
-            --run-id "${{ steps.train.outputs.run_id }}" \
+            --run-id "${{ steps.train.outputs.local_run_id }}" \
             --stage "staging" \
             --tags "automated_training=true,drift_reason=${{ needs.drift-check.outputs.drift_reason }}"
 
@@ -199,7 +199,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No registry changes to commit"
           else
-            git commit -m "ci: register training run ${{ steps.train.outputs.run_id }}"
+            git commit -m "ci: register training run ${{ steps.train.outputs.local_run_id }}"
             git push origin HEAD:${{ github.ref_name }}
           fi
           echo "Model artifacts are managed by DVC/DagsHub, not Git."
