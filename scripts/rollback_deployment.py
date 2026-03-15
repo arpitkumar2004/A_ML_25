@@ -10,7 +10,8 @@ import argparse
 
 def rollback_deployment(
     to_previous_production: bool = True,
-    reason: str = "Manual rollback"
+    reason: str = "Manual rollback",
+    registry_dir: str = "experiments/registry",
 ) -> str:
     """
     Rollback to previous production model.
@@ -24,8 +25,7 @@ def rollback_deployment(
     """
     
     from src.registry.model_registry import rollback_to_run, list_runs
-    
-    registry_dir = "experiments/registry"
+    from src.utils.deployment_state import write_deployment_manifest, write_production_tracker
     
     try:
         runs = list_runs(registry_dir)
@@ -43,6 +43,21 @@ def rollback_deployment(
         
         # Rollback
         rollback_to_run(previous_prod, registry_dir)
+        write_deployment_manifest(
+            run_id=previous_prod,
+            strategy="rollback",
+            manifest_path=os.path.join(registry_dir, "deployment_manifest.json"),
+            registry_dir=registry_dir,
+            status="rolled_back",
+        )
+        write_production_tracker(
+            run_id=previous_prod,
+            strategy="rollback",
+            manifest_path=os.path.join(registry_dir, "production_tracker.json"),
+            registry_dir=registry_dir,
+            deployment_manifest_path=os.path.join(registry_dir, "deployment_manifest.json"),
+            status="rolled_back",
+        )
         
         # Record rollback
         rollback_record = {
@@ -70,12 +85,14 @@ def main():
     parser = argparse.ArgumentParser(description="Rollback deployment")
     parser.add_argument("--to-previous-production", action="store_true", default=True)
     parser.add_argument("--reason", default="Manual rollback", help="Rollback reason")
+    parser.add_argument("--registry-dir", default="experiments/registry")
     
     args = parser.parse_args()
     
     rollback_deployment(
         to_previous_production=args.to_previous_production,
-        reason=args.reason
+        reason=args.reason,
+        registry_dir=args.registry_dir,
     )
 
 
