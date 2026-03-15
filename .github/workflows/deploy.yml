@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: 'MLflow run ID to deploy (must be in production stage)'
+        description: 'Canonical local run ID to deploy (must be in production stage)'
         required: true
       deployment_strategy:
         description: 'Deployment strategy'
@@ -74,7 +74,8 @@ jobs:
         run: |
           python scripts/test_model_inference.py \
             --run-id "${{ github.event.inputs.run_id }}" \
-            --test-dataset data/raw/test.csv
+            --test-dataset data/raw/test.csv \
+            --output /tmp/pre_deploy_inference.json
 
       - name: Upload pre-deployment report
         uses: actions/upload-artifact@v4
@@ -83,8 +84,63 @@ jobs:
           path: /tmp/deployment_checks.json
           retention-days: 30
 
-  canary-deployment:
+  build-serving-release:
     needs: pre-deployment-checks
+    if: needs.pre-deployment-checks.outputs.deployment_approved == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      service_image: ${{ steps.meta.outputs.service_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Setup Python and dependencies
+        uses: ./.github/actions/python-setup
+
+      - name: Set serving image metadata
+        id: meta
+        run: |
+          IMAGE_TAG="aml25-serving:${{ github.event.inputs.run_id }}"
+          echo "service_image=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Create deployable bundle package
+        run: |
+          python scripts/create_deployment_package.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --output-dir deployments/current \
+            --service-image "${{ steps.meta.outputs.service_image }}"
+
+      - name: Build serving image
+        run: |
+          docker build \
+            -f docker/Dockerfile.serving \
+            -t "${{ steps.meta.outputs.service_image }}" \
+            .
+
+      - name: Export serving image tarball
+        run: |
+          mkdir -p /tmp/serving-release
+          docker save "${{ steps.meta.outputs.service_image }}" -o "/tmp/serving-release/${{ github.event.inputs.run_id }}-serving-image.tar"
+
+      - name: Upload serving image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: serving-image-${{ github.event.inputs.run_id }}
+          path: /tmp/serving-release/${{ github.event.inputs.run_id }}-serving-image.tar
+          retention-days: 14
+
+      - name: Upload deployment package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-package-${{ github.event.inputs.run_id }}
+          path: deployments/current
+          retention-days: 14
+
+  canary-deployment:
+    needs: [pre-deployment-checks, build-serving-release]
     if: |
       github.event.inputs.deployment_strategy == 'canary' &&
       needs.pre-deployment-checks.outputs.deployment_approved == 'true'
@@ -132,16 +188,48 @@ jobs:
           # Read the config to verify
           cat experiments/registry/canary_config.json
 
+      - name: Record canary deployment manifest
+        run: |
+          python scripts/update_deployment_manifest.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --strategy canary \
+            --manifest-path experiments/registry/deployment_manifest.json \
+            --environment production \
+            --deployed-by "${{ github.actor }}" \
+            --deployment-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --canary-percent "${{ github.event.inputs.canary_percent || 10 }}" \
+            --status canary \
+            --service-image "${{ needs.build-serving-release.outputs.service_image }}"
+
+      - name: Run canary inference smoke test
+        run: |
+          python scripts/test_model_inference.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --test-dataset data/raw/test.csv \
+            --output /tmp/canary_inference.json
+
       - name: Wait for canary warm-up (30 seconds)
         run: sleep 30
 
       - name: Monitor canary metrics
         id: monitor
+        env:
+          CANARY_SERVICE_BASE_URL: ${{ secrets.CANARY_SERVICE_BASE_URL }}
         run: |
-          python scripts/monitor_canary_metrics.py \
-            --duration 60 \
-            --sample-size 100 \
-            --output /tmp/canary_metrics.json
+          if [ -n "$CANARY_SERVICE_BASE_URL" ]; then
+            python scripts/monitor_canary_metrics.py \
+              --duration 60 \
+              --sample-size 100 \
+              --service-base-url "$CANARY_SERVICE_BASE_URL" \
+              --expected-run-id "${{ github.event.inputs.run_id }}" \
+              --output /tmp/canary_metrics.json
+          else
+            python scripts/monitor_canary_metrics.py \
+              --duration 60 \
+              --sample-size 100 \
+              --metrics-input /tmp/canary_inference.json \
+              --output /tmp/canary_metrics.json
+          fi
           
           python -c "
           import json
@@ -163,6 +251,16 @@ jobs:
           with open('experiments/registry/canary_config.json', 'w') as f:
               json.dump(config, f, indent=2)
           "
+          python scripts/update_deployment_manifest.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --strategy canary \
+            --manifest-path experiments/registry/deployment_manifest.json \
+            --environment production \
+            --deployed-by "${{ github.actor }}" \
+            --deployment-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --canary-percent 100 \
+            --status active \
+            --service-image "${{ needs.build-serving-release.outputs.service_image }}"
           echo "✓ Canary promoted to full deployment"
 
       - name: Rollback on failure
@@ -196,7 +294,7 @@ jobs:
           fi
 
   blue-green-deployment:
-    needs: pre-deployment-checks
+    needs: [pre-deployment-checks, build-serving-release]
     if: |
       github.event.inputs.deployment_strategy == 'blue_green' &&
       needs.pre-deployment-checks.outputs.deployment_approved == 'true'
@@ -245,7 +343,8 @@ jobs:
         run: |
           python scripts/test_model_inference.py \
             --run-id "${{ github.event.inputs.run_id }}" \
-            --test-dataset data/raw/test.csv
+            --test-dataset data/raw/test.csv \
+            --output /tmp/blue_green_inference.json
 
       - name: Switch traffic to green
         run: |
@@ -258,6 +357,15 @@ jobs:
           with open('experiments/registry/blue_green_config.json', 'w') as f:
               json.dump(config, f, indent=2)
           "
+          python scripts/update_deployment_manifest.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --strategy blue_green \
+            --manifest-path experiments/registry/deployment_manifest.json \
+            --environment production \
+            --deployed-by "${{ github.actor }}" \
+            --deployment-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --status active \
+            --service-image "${{ needs.build-serving-release.outputs.service_image }}"
           echo "✓ Traffic switched to green (production)"
 
       - name: Rollback on failure
@@ -288,7 +396,7 @@ jobs:
           fi
 
   post-deployment:
-    needs: [pre-deployment-checks, canary-deployment, blue-green-deployment]
+    needs: [pre-deployment-checks, build-serving-release, canary-deployment, blue-green-deployment]
     if: |
       always() &&
       needs.pre-deployment-checks.outputs.deployment_approved == 'true' &&
@@ -306,16 +414,47 @@ jobs:
 
       - name: Update production tracker
         run: |
+          python scripts/update_deployment_manifest.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --strategy "${{ github.event.inputs.deployment_strategy }}" \
+            --manifest-path experiments/registry/deployment_manifest.json \
+            --environment production \
+            --deployed-by "${{ github.actor }}" \
+            --deployment-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --status active \
+            --service-image "${{ needs.build-serving-release.outputs.service_image }}"
           python scripts/update_production_tracker.py \
             --run-id "${{ github.event.inputs.run_id }}" \
             --strategy "${{ github.event.inputs.deployment_strategy }}" \
-            --manifest-path experiments/registry/production_tracker.json
+            --manifest-path experiments/registry/production_tracker.json \
+            --deployment-manifest-path experiments/registry/deployment_manifest.json
 
       - name: Trigger health check workflow
-        run: echo "Health check workflow can be triggered separately"
+        env:
+          SERVICE_BASE_URL: ${{ secrets.PRODUCTION_SERVICE_BASE_URL }}
+        run: |
+          if [ -n "$SERVICE_BASE_URL" ]; then
+            python scripts/health_check.py \
+              --check-production-model \
+              --check-registry \
+              --check-inference \
+              --service-base-url "$SERVICE_BASE_URL" \
+              --output /tmp/post_deploy_health.json
+          else
+            echo "Health check workflow can be triggered separately"
+          fi
 
       - name: Notify channels
         run: echo "Deployment notification can integrate with Slack/PagerDuty"
+
+      - name: Upload post-deployment health
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-deployment-health
+          path: /tmp/post_deploy_health.json
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Persist production tracker
         run: |
@@ -323,6 +462,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git pull --rebase origin "${{ github.ref_name }}"
           git add experiments/registry/production_tracker.json
+          git add experiments/registry/deployment_manifest.json
           if git diff --cached --quiet; then
             echo "No production tracker changes to commit"
           else
