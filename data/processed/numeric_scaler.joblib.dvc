@@ -1,5 +1,5 @@
 outs:
-- md5: 89e0563d2d6d9a3a6cb61ca898f14ffb
-  size: 1205
+- md5: 65e13f339cb0370903cef1025fadb58c
+  size: 1209
   hash: md5
   path: numeric_scaler.joblib
