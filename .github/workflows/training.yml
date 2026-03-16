@@ -182,6 +182,19 @@ jobs:
             --stage "staging" \
             --tags "automated_training=true,drift_reason=${{ needs.drift-check.outputs.drift_reason }}"
 
+      - name: Persist durable bundle archive
+        if: steps.validate.outputs.validation_passed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BUNDLE_RELEASE_TAG_PREFIX: bundle-archive
+        run: |
+          python scripts/persist_bundle_release_asset.py \
+            --run-id "${{ steps.train.outputs.local_run_id }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --token "$GITHUB_TOKEN" \
+            --output /tmp/bundle_release.json
+
       - name: Persist registry state
         if: steps.validate.outputs.validation_passed == 'true'
         run: |
@@ -212,6 +225,7 @@ jobs:
             experiments/registry/
             /tmp/validation.json
             /tmp/training_outputs.json
+            /tmp/bundle_release.json
           retention-days: 30
 
       - name: Push model artifacts to DagsHub

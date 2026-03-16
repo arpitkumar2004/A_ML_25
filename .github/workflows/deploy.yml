@@ -2,6 +2,7 @@ name: Deployment
 
 permissions:
   contents: write
+  actions: read
 
 on:
   workflow_dispatch:
@@ -37,6 +38,18 @@ jobs:
 
       - name: Setup Python and dependencies
         uses: ./.github/actions/python-setup
+
+      - name: Restore bundle from durable storage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BUNDLE_RELEASE_TAG_PREFIX: bundle-archive
+        run: |
+          python scripts/restore_training_bundle.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --token "$GITHUB_TOKEN" \
+            --output /tmp/restored_bundle.json
 
       - name: Pull deployment test data
         env:
@@ -100,6 +113,18 @@ jobs:
       - name: Setup Python and dependencies
         uses: ./.github/actions/python-setup
 
+      - name: Restore bundle from durable storage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BUNDLE_RELEASE_TAG_PREFIX: bundle-archive
+        run: |
+          python scripts/restore_training_bundle.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --token "$GITHUB_TOKEN" \
+            --output /tmp/restored_bundle.json
+
       - name: Set serving image metadata
         id: meta
         run: |
@@ -154,6 +179,18 @@ jobs:
 
       - name: Setup Python and dependencies
         uses: ./.github/actions/python-setup
+
+      - name: Restore bundle from durable storage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BUNDLE_RELEASE_TAG_PREFIX: bundle-archive
+        run: |
+          python scripts/restore_training_bundle.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --token "$GITHUB_TOKEN" \
+            --output /tmp/restored_bundle.json
 
       - name: Pull green-environment test data
         env:
@@ -308,6 +345,18 @@ jobs:
 
       - name: Setup Python and dependencies
         uses: ./.github/actions/python-setup
+
+      - name: Restore bundle from durable storage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BUNDLE_RELEASE_TAG_PREFIX: bundle-archive
+        run: |
+          python scripts/restore_training_bundle.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --token "$GITHUB_TOKEN" \
+            --output /tmp/restored_bundle.json
 
       - name: Pull blue-green test data
         env:

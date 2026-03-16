@@ -3,6 +3,7 @@ name: Health Check
 permissions:
   contents: write
   issues: write
+  actions: read
 
 on:
   schedule:
@@ -35,6 +36,27 @@ jobs:
 
       - name: Setup Python and dependencies
         uses: ./.github/actions/python-setup
+
+      - name: Resolve active production run
+        id: active
+        continue-on-error: true
+        run: |
+          python scripts/resolve_active_production_run.py --output /tmp/active_production_run.json
+          RUN_ID=$(python -c "import json; print(json.load(open('/tmp/active_production_run.json', encoding='utf-8')).get('run_id', ''))")
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
+      - name: Restore active production bundle
+        if: steps.active.outputs.run_id != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BUNDLE_RELEASE_TAG_PREFIX: bundle-archive
+        run: |
+          python scripts/restore_training_bundle.py \
+            --run-id "${{ steps.active.outputs.run_id }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --token "$GITHUB_TOKEN" \
+            --output /tmp/restored_production_bundle.json
 
       - name: Run system health checks
         id: check

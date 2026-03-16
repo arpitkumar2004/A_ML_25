@@ -51,9 +51,22 @@ def test_training_workflow_uses_canonical_local_run_outputs() -> None:
     training_workflow = (WORKFLOWS_DIR / "training.yml").read_text(encoding="utf-8")
     assert "experiments/runs/" in training_workflow
     assert 'echo "run_id=$LOCAL_RUN_ID" >> $GITHUB_OUTPUT' in training_workflow
+    assert "persist_bundle_release_asset.py" in training_workflow
 
 
 def test_promotion_workflow_uses_valid_deployment_manifest_args() -> None:
     promote_workflow = (WORKFLOWS_DIR / "promote.yml").read_text(encoding="utf-8")
     assert "--strategy promotion" in promote_workflow
     assert "--stage" not in promote_workflow
+    assert "restore_training_bundle.py" in promote_workflow
+
+
+def test_deploy_and_health_workflows_restore_bundles_from_durable_storage() -> None:
+    deploy_workflow = (WORKFLOWS_DIR / "deploy.yml").read_text(encoding="utf-8")
+    health_workflow = (WORKFLOWS_DIR / "health-check.yml").read_text(encoding="utf-8")
+    publish_workflow = (WORKFLOWS_DIR / "publish-hf-space.yml").read_text(encoding="utf-8")
+
+    assert "restore_training_bundle.py" in deploy_workflow
+    assert "restore_training_bundle.py" in health_workflow
+    assert "resolve_active_production_run.py" in health_workflow
+    assert "restore_training_bundle.py" in publish_workflow

@@ -1,0 +1,18 @@
+{
+  "run_id": "train_20260315T093004Z",
+  "target_stage": "production",
+  "passed": true,
+  "metrics": {
+    "smape": 25.44870017600727,
+    "training_duration": 15.2789,
+    "dataset_size": 0.01
+  },
+  "failures": [],
+  "warnings": [
+    "Accuracy metric not available in local bundle report; promotion will rely on SMAPE-based validation",
+    "Latency metric not available in local training bundle; skipping latency gate",
+    "Error rate metric not available in local training bundle; skipping error-rate gate"
+  ],
+  "resolved_mlflow_run_id": "train_20260315T093004Z",
+  "metrics_source": "local_bundle"
+}

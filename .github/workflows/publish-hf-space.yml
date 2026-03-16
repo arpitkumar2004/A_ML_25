@@ -45,12 +45,13 @@ jobs:
           RUN_ID=$(python -c "import json; print(json.load(open('/tmp/resolved_hf_run.json', encoding='utf-8'))['resolved_run_id'])")
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
 
-      - name: Restore run bundle from training artifacts
+      - name: Restore run bundle from durable storage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          BUNDLE_RELEASE_TAG_PREFIX: bundle-archive
         run: |
-          python scripts/restore_training_bundle_from_artifact.py \
+          python scripts/restore_training_bundle.py \
             --run-id "${{ steps.resolve.outputs.run_id }}" \
             --repo "$GITHUB_REPOSITORY" \
             --token "$GITHUB_TOKEN" \

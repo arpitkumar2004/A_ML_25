@@ -2,6 +2,7 @@ name: Model Promotion
 
 permissions:
   contents: write
+  actions: read
 
 on:
   workflow_dispatch:
@@ -33,6 +34,18 @@ jobs:
 
       - name: Setup Python and dependencies
         uses: ./.github/actions/python-setup
+
+      - name: Restore bundle from durable storage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUNDLE_RELEASE_TAG_PREFIX: bundle-archive
+        run: |
+          python scripts/restore_training_bundle.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --repo "${{ github.repository }}" \
+            --token "${{ secrets.GITHUB_TOKEN }}" \
+            --artifact-name training-artifacts \
+            --output /tmp/restored_bundle.json
 
       - name: Validate run and fetch metrics
         id: checks
