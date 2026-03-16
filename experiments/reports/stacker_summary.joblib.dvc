@@ -1,0 +1,5 @@
+outs:
+- md5: d02e66c890a1e91786bf8840cf6322e6
+  size: 156
+  hash: md5
+  path: stacker_summary.joblib

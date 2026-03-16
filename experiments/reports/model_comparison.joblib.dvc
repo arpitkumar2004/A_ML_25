@@ -1,0 +1,5 @@
+outs:
+- md5: 644fb89099ff6981516613cd62be5268
+  size: 1395
+  hash: md5
+  path: model_comparison.joblib

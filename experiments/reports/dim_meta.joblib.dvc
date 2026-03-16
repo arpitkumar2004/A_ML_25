@@ -1,0 +1,5 @@
+outs:
+- md5: 9d1bcb3ae163fa48c36932b978ab99c9
+  size: 5
+  hash: md5
+  path: dim_meta.joblib
