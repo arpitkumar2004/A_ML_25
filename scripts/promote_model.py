@@ -19,7 +19,8 @@ def promote_model(
     run_id: str,
     target_stage: str,
     promoted_by: str = "automation",
-    promotion_url: str = ""
+    promotion_url: str = "",
+    activate_production: bool = True,
 ) -> str:
     """
     Promote model to target stage.
@@ -29,7 +30,8 @@ def promote_model(
         target_stage: Target stage (staging, canary, production)
         promoted_by: User/entity promoting the model
         promotion_url: Link to promotion workflow (GitHub Actions URL)
-    
+        activate_production: Whether a production promotion should also become active
+
     Returns:
         Path to updated registry index
     """
@@ -65,7 +67,7 @@ def promote_model(
         )
         
         # Promote to target stage
-        promote_run(run_id, target_stage, registry_dir)
+        promote_run(run_id, target_stage, registry_dir, activate_production=activate_production)
         
         print(f"✓ Model {run_id} promoted to {target_stage}")
         
@@ -96,6 +98,12 @@ def main():
     parser.add_argument("--target-stage", required=True, help="Target stage")
     parser.add_argument("--promoted-by", default="automation", help="User promoting model")
     parser.add_argument("--promotion-url", default="", help="Promotion workflow URL")
+    parser.add_argument(
+        "--activate-production",
+        default="true",
+        choices=("true", "false"),
+        help="Whether a production promotion should also become the active deployment",
+    )
     
     args = parser.parse_args()
     
@@ -103,7 +111,8 @@ def main():
         run_id=args.run_id,
         target_stage=args.target_stage,
         promoted_by=args.promoted_by,
-        promotion_url=args.promotion_url
+        promotion_url=args.promotion_url,
+        activate_production=args.activate_production == "true",
     )
 
 

@@ -89,12 +89,14 @@ def test_create_hf_space_package_builds_docker_space_repo(tmp_path):
 
     readme = (output_dir / "README.md").read_text(encoding="utf-8")
     dockerfile = (output_dir / "Dockerfile").read_text(encoding="utf-8")
+    start_script = (output_dir / "start-serving.sh").read_text(encoding="utf-8")
     summary_json = IO.load_json(str(output_dir / "space_package_summary.json"))
 
     assert "sdk: docker" in readme
     assert "app_port: 7860" in readme
     assert summary["run_id"] in readme
     assert "EXPOSE 7860" in dockerfile
+    assert "/app/deployment-metadata/service.env" in start_script
     assert summary_json["space_repo_id"] == "arpitkumariitkgp/aml25"
 
 

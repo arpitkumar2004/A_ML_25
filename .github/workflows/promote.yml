@@ -11,12 +11,11 @@ on:
         description: 'Canonical local run ID to promote'
         required: true
       target_stage:
-        description: 'Target stage (staging -> production)'
+        description: 'Target release stage'
         required: true
         type: choice
         options:
           - staging
-          - canary
           - production
 
 jobs:
@@ -26,6 +25,7 @@ jobs:
     outputs:
       approved: ${{ steps.checks.outputs.approved }}
       model_metrics: ${{ steps.checks.outputs.metrics }}
+      resolved_run_id: ${{ steps.resolve.outputs.run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,19 +35,29 @@ jobs:
       - name: Setup Python and dependencies
         uses: ./.github/actions/python-setup
 
+      - name: Resolve canonical bundle-backed run id
+        id: resolve
+        run: |
+          python scripts/resolve_registry_run.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --output /tmp/resolved_promotion_run.json
+
+          RUN_ID=$(python -c "import json; print(json.load(open('/tmp/resolved_promotion_run.json', encoding='utf-8'))['resolved_run_id'])")
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
       - name: Restore bundle from durable storage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUNDLE_RELEASE_TAG_PREFIX: bundle-archive
         run: |
           python scripts/restore_training_bundle.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
+            --run-id "${{ steps.resolve.outputs.run_id }}" \
             --repo "${{ github.repository }}" \
             --token "${{ secrets.GITHUB_TOKEN }}" \
             --artifact-name training-artifacts \
             --output /tmp/restored_bundle.json
 
-      - name: Validate run and fetch metrics
+      - name: Validate run for promotion
         id: checks
         env:
           MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
@@ -55,27 +65,28 @@ jobs:
           MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
         run: |
           python scripts/validate_promotion.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
+            --run-id "${{ steps.resolve.outputs.run_id }}" \
             --target-stage "${{ github.event.inputs.target_stage }}" \
             --output /tmp/promotion_check.json
-          
-          # Parse validation result
+
           python -c "
           import json
-          with open('/tmp/promotion_check.json') as f:
+          with open('/tmp/promotion_check.json', encoding='utf-8') as f:
               result = json.load(f)
           print(f\"approved={'true' if result.get('passed') else 'false'}\")
           print(f\"metrics={json.dumps(result.get('metrics', {}))}\")
           " >> $GITHUB_OUTPUT
 
-      - name: Upload validation report
+      - name: Upload promotion validation
         uses: actions/upload-artifact@v4
         with:
-          name: promotion-validation
-          path: /tmp/promotion_check.json
+          name: promotion-validation-${{ steps.resolve.outputs.run_id }}
+          path: |
+            /tmp/promotion_check.json
+            /tmp/resolved_promotion_run.json
+            /tmp/restored_bundle.json
           retention-days: 30
 
-  # Require manual approval for production promotions
   approval:
     needs: pre-promotion-checks
     if: github.event.inputs.target_stage == 'production' && needs.pre-promotion-checks.outputs.approved == 'true'
@@ -84,7 +95,7 @@ jobs:
       name: production
     steps:
       - name: Approval required
-        run: echo "Production promotion approved by GitHub environment protection"
+        run: echo "Production release approval granted via environment protection"
 
   promote:
     needs: [pre-promotion-checks, approval]
@@ -100,13 +111,19 @@ jobs:
       - name: Setup Python and dependencies
         uses: ./.github/actions/python-setup
 
-      - name: Promote model in registry
+      - name: Promote run in registry
         run: |
+          ACTIVATE_PRODUCTION="true"
+          if [ "${{ github.event.inputs.target_stage }}" = "production" ]; then
+            ACTIVATE_PRODUCTION="false"
+          fi
+
           python scripts/promote_model.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
+            --run-id "${{ needs.pre-promotion-checks.outputs.resolved_run_id }}" \
             --target-stage "${{ github.event.inputs.target_stage }}" \
             --promoted-by "${{ github.actor }}" \
-            --promotion-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            --promotion-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --activate-production "$ACTIVATE_PRODUCTION"
 
       - name: Persist promotion state
         run: |
@@ -117,75 +134,22 @@ jobs:
           if git diff --cached --quiet; then
             echo "No promotion state changes to commit"
           else
-            git commit -m "ci: promote model ${{ github.event.inputs.run_id }} to ${{ github.event.inputs.target_stage }}"
+            git commit -m "ci: promote model ${{ needs.pre-promotion-checks.outputs.resolved_run_id }} to ${{ github.event.inputs.target_stage }}"
             git push origin HEAD:${{ github.ref_name }}
           fi
 
-      - name: Tag git commit
+      - name: Tag approved release
+        if: github.event.inputs.target_stage == 'production'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          TAG="model/${{ github.event.inputs.target_stage }}-${{ github.event.inputs.run_id }}-$(date +%Y%m%d_%H%M%S)"
-          git tag -a "$TAG" -m "Model promotion: ${{ github.event.inputs.run_id }} -> ${{ github.event.inputs.target_stage }}" HEAD 2>/dev/null || true
+          TAG="release-approval/${{ needs.pre-promotion-checks.outputs.resolved_run_id }}-$(date +%Y%m%d_%H%M%S)"
+          git tag -a "$TAG" -m "Approved for production deployment: ${{ needs.pre-promotion-checks.outputs.resolved_run_id }}" HEAD 2>/dev/null || true
           git push origin "$TAG" 2>/dev/null || true
 
-      - name: Publish release
-        if: github.event.inputs.target_stage == 'production'
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload promotion summary
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: v/${{ github.event.inputs.run_id }}
-          release_name: "Production Release - ${{ github.event.inputs.run_id }}"
-          body: |
-            ## Model Promotion
-            - Run ID: ${{ github.event.inputs.run_id }}
-            - Target Stage: ${{ github.event.inputs.target_stage }}
-            - Promoted by: ${{ github.actor }}
-            - Metrics: ${{ needs.pre-promotion-checks.outputs.model_metrics }}
-
-  post-promotion:
-    needs: [promote]
-    if: needs.promote.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
-
-      - name: Setup Python and dependencies
-        uses: ./.github/actions/python-setup
-
-      - name: Update deployment manifest
-        if: github.event.inputs.target_stage == 'production'
-        run: |
-          python scripts/update_deployment_manifest.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
-            --strategy promotion \
-            --manifest-path experiments/registry/deployment_manifest.json \
-            --status promoted \
-            --deployed-by "${{ github.actor }}" \
-            --deployment-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-
-      - name: Persist deployment manifest
-        if: github.event.inputs.target_stage == 'production'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase --autostash origin "${{ github.ref_name }}"
-          git add experiments/registry/deployment_manifest.json
-          if git diff --cached --quiet; then
-            echo "No deployment manifest changes to commit"
-          else
-            git commit -m "ci: update deployment manifest for ${{ github.event.inputs.run_id }}"
-            git push origin HEAD:${{ github.ref_name }}
-          fi
-
-      - name: Notify deployment system
-        if: github.event.inputs.target_stage == 'production'
-        run: |
-          # Trigger deployment workflow via workflow_dispatch
-          echo "Deployment manifest updated. Manual deployment via deploy.yml workflow."
+          name: promotion-summary-${{ needs.pre-promotion-checks.outputs.resolved_run_id }}
+          path: experiments/registry
+          retention-days: 14

@@ -26,6 +26,26 @@ def fetch_json(base_url: str, path: str, timeout_seconds: float = 5.0) -> Dict[s
     return data
 
 
+def post_json(base_url: str, path: str, payload: Dict[str, Any], timeout_seconds: float = 10.0) -> Dict[str, Any]:
+    url = _join_url(base_url, path)
+    encoded_payload = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=encoded_payload,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        response_payload = response.read().decode("utf-8")
+    data = json.loads(response_payload)
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected JSON object from {url}")
+    return data
+
+
 def probe_live_service(
     base_url: str,
     expected_run_id: Optional[str] = None,
@@ -68,4 +88,71 @@ def try_probe_live_service(
             "valid": False,
             "errors": [f"service_probe_failed:{exc}"],
             "metrics": {},
+        }
+
+
+def probe_live_prediction(
+    base_url: str,
+    expected_run_id: Optional[str] = None,
+    timeout_seconds: float = 10.0,
+    sample_payload: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    payload = sample_payload or {
+        "records": [
+            {
+                "sample_id": 1,
+                "catalog_content": "Organic green tea bags, 20 count, natural flavor.",
+                "image_link": "",
+            }
+        ],
+        "text_col": "catalog_content",
+        "image_col": "image_link",
+        "id_col": "sample_id",
+        "pred_col": "predicted_price",
+        "min_value": 0.0,
+        "round": True,
+    }
+
+    service_probe = probe_live_service(
+        base_url=base_url,
+        expected_run_id=expected_run_id,
+        timeout_seconds=timeout_seconds,
+    )
+    prediction_response = post_json(base_url, "/v1/predict", payload=payload, timeout_seconds=timeout_seconds)
+
+    errors = list(service_probe.get("errors", []))
+    predictions = prediction_response.get("predictions")
+    if not isinstance(predictions, list) or not predictions:
+        errors.append("prediction_response_missing_predictions")
+
+    return {
+        "reachable": True,
+        "base_url": base_url,
+        "service_probe": service_probe,
+        "prediction_request": payload,
+        "prediction_response": prediction_response,
+        "valid": service_probe.get("valid", False) and len(errors) == 0,
+        "errors": errors,
+    }
+
+
+def try_probe_live_prediction(
+    base_url: str,
+    expected_run_id: Optional[str] = None,
+    timeout_seconds: float = 10.0,
+    sample_payload: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    try:
+        return probe_live_prediction(
+            base_url=base_url,
+            expected_run_id=expected_run_id,
+            timeout_seconds=timeout_seconds,
+            sample_payload=sample_payload,
+        )
+    except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:
+        return {
+            "reachable": False,
+            "base_url": base_url,
+            "valid": False,
+            "errors": [f"live_prediction_probe_failed:{exc}"],
         }

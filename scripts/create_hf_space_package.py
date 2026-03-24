@@ -110,6 +110,12 @@ def _write_start_script(path: Path, port: int) -> None:
     script = f"""#!/usr/bin/env sh
 set -eu
 
+if [ -f /app/deployment-metadata/service.env ]; then
+    set -a
+    . /app/deployment-metadata/service.env
+    set +a
+fi
+
 PORT="${{PORT:-{port}}}"
 HOST="${{HOST:-0.0.0.0}}"
 UVICORN_WORKERS="${{UVICORN_WORKERS:-1}}"

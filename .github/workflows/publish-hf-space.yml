@@ -97,11 +97,21 @@ jobs:
             --interval-seconds 20 \
             --output /tmp/hf-space-health.json
 
+      - name: Run live prediction smoke test
+        run: |
+          SPACE_URL="https://$(echo '${{ github.event.inputs.space_repo_id }}' | tr '/' '-').hf.space"
+          python scripts/live_service_smoke_test.py \
+            --service-base-url "$SPACE_URL" \
+            --expected-run-id "${{ steps.resolve.outputs.run_id }}" \
+            --output /tmp/hf-space-smoke.json
+
       - name: Upload Space health result
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: hf-space-health-${{ steps.resolve.outputs.run_id }}
-          path: /tmp/hf-space-health.json
+          path: |
+            /tmp/hf-space-health.json
+            /tmp/hf-space-smoke.json
           if-no-files-found: ignore
           retention-days: 7

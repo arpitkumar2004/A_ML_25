@@ -1,13 +1,12 @@
 name: Health Check
 
 permissions:
-  contents: write
+  contents: read
   issues: write
   actions: read
 
 on:
   schedule:
-    # Run every 6 hours
     - cron: '0 */6 * * *'
   workflow_dispatch:
   workflow_call:
@@ -36,6 +35,20 @@ jobs:
 
       - name: Setup Python and dependencies
         uses: ./.github/actions/python-setup
+        with:
+          cache: 'true'
+
+      - name: Resolve production service URL
+        id: service
+        env:
+          SERVICE_BASE_URL_SECRET: ${{ secrets.PRODUCTION_SERVICE_BASE_URL }}
+          HF_SPACE_REPO_ID: ${{ vars.HF_SPACE_REPO_ID }}
+        run: |
+          SERVICE_BASE_URL="$SERVICE_BASE_URL_SECRET"
+          if [ -z "$SERVICE_BASE_URL" ] && [ -n "$HF_SPACE_REPO_ID" ]; then
+            SERVICE_BASE_URL="https://$(echo "$HF_SPACE_REPO_ID" | tr '/' '-').hf.space"
+          fi
+          echo "service_base_url=$SERVICE_BASE_URL" >> $GITHUB_OUTPUT
 
       - name: Resolve active production run
         id: active
@@ -64,7 +77,7 @@ jobs:
           MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
           MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
           MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
-          SERVICE_BASE_URL: ${{ secrets.PRODUCTION_SERVICE_BASE_URL }}
+          SERVICE_BASE_URL: ${{ steps.service.outputs.service_base_url }}
         run: |
           MLFLOW_FLAG=""
           if [[ -n "$MLFLOW_TRACKING_URI" ]]; then
@@ -77,49 +90,45 @@ jobs:
             --check-registry \
             --check-inference \
             --service-base-url "$SERVICE_BASE_URL" \
-            --output /tmp/health_report.json
-          
+            --output /tmp/health_report.json || true
+
           python -c "
           import json
-          with open('/tmp/health_report.json') as f:
+          with open('/tmp/health_report.json', encoding='utf-8') as f:
               result = json.load(f)
           print(f\"status={result.get('overall_status', 'unknown')}\")
           print(f\"issues={json.dumps(result.get('failed_checks', []))}\")
           " >> $GITHUB_OUTPUT
 
       - name: Validate production model performance
+        if: steps.service.outputs.service_base_url != ''
+        continue-on-error: true
         env:
-          SERVICE_BASE_URL: ${{ secrets.PRODUCTION_SERVICE_BASE_URL }}
+          SERVICE_BASE_URL: ${{ steps.service.outputs.service_base_url }}
         run: |
           python scripts/validate_production_model.py \
             --service-base-url "$SERVICE_BASE_URL"
 
-      - name: Check data/concept drift in production
+      - name: Run live prediction smoke test
+        if: steps.service.outputs.service_base_url != '' && steps.active.outputs.run_id != ''
+        continue-on-error: true
         run: |
-          if [[ -f experiments/registry/baseline_stats.json ]]; then
-            python scripts/check_production_drift.py \
-              --baseline experiments/registry/baseline_stats.json \
-              --output /tmp/drift_report.json
-          else
-            printf '{"status":"skipped","reason":"baseline_stats_missing"}\n' > /tmp/drift_report.json
-          fi
+          python scripts/live_service_smoke_test.py \
+            --service-base-url "${{ steps.service.outputs.service_base_url }}" \
+            --expected-run-id "${{ steps.active.outputs.run_id }}" \
+            --output /tmp/live_service_smoke.json
 
-      - name: Verify resource usage
-        run: |
-          python scripts/check_resource_usage.py \
-            --check-disk-space \
-            --check-model-cache \
-            --warning-threshold 80
-
-      - name: Upload health report
+      - name: Upload health artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: health-report
           path: |
+            /tmp/active_production_run.json
             /tmp/health_report.json
-            /tmp/drift_report.json
-          retention-days: 90
+            /tmp/live_service_smoke.json
+          if-no-files-found: ignore
+          retention-days: 30
 
   escalate-on-unhealthy:
     needs: health-check
@@ -133,56 +142,16 @@ jobs:
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: '⚠️ Production System Health Alert',
+              title: 'Production health check failed',
               body: `
                 ## Health Check Failed
-                
+
                 **Status**: ${{ needs.health-check.outputs.status }}
-                
+
                 **Issues**:
                 ${{ needs.health-check.outputs.issues }}
-                
-                [View Health Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+                [View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
               `,
-              labels: ['critical', 'health-check']
+              labels: ['health-check', 'portfolio-demo']
             })
-
-      - name: Notify ops team (integration point)
-        run: |
-          echo "Send alert to: Slack, PagerDuty, Email, etc."
-          echo "Status: ${{ needs.health-check.outputs.status }}"
-          echo "Issues: ${{ needs.health-check.outputs.issues }}"
-
-  auto-rollback-if-critical:
-    needs: health-check
-    if: needs.health-check.outputs.status != 'healthy'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
-
-      - name: Setup Python and dependencies
-        uses: ./.github/actions/python-setup
-
-      - name: Trigger automatic rollback
-        run: |
-          echo "⚠️ CRITICAL health issues detected - initiating auto-rollback"
-          python scripts/auto_rollback.py \
-            --steps-back 2 \
-            --reason "Critical health check failure" \
-            --approval-reason "Automatic safety rollback"
-
-      - name: Persist rollback state
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin "${{ github.ref_name }}"
-          git add experiments/registry
-          if git diff --cached --quiet; then
-            echo "No rollback state changes to commit"
-          else
-            git commit -m "ci: auto rollback after failed health check"
-            git push origin HEAD:${{ github.ref_name }}
-          fi

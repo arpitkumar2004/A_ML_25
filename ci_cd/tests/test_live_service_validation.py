@@ -135,6 +135,13 @@ def test_health_and_validation_prefer_live_service_probe(monkeypatch, tmp_path):
     }
 
     monkeypatch.setattr("scripts.health_check.try_probe_live_service", lambda *args, **kwargs: live_probe)
+    monkeypatch.setattr(
+        "scripts.health_check.try_probe_live_prediction",
+        lambda *args, **kwargs: {
+            **live_probe,
+            "prediction_response": {"predictions": [{"sample_id": 1, "predicted_price": 10.0}]},
+        },
+    )
     monkeypatch.setattr("scripts.validate_production_model.try_probe_live_service", lambda *args, **kwargs: live_probe)
     monkeypatch.setattr("scripts.monitor_canary_metrics.try_probe_live_service", lambda *args, **kwargs: live_probe)
 

@@ -84,7 +84,12 @@ def get_active_production(registry_dir: str = "experiments/registry") -> Optiona
     return idx.get("active_production_run_id")
 
 
-def promote_run(run_id: str, target_stage: str = "production", registry_dir: str = "experiments/registry") -> str:
+def promote_run(
+    run_id: str,
+    target_stage: str = "production",
+    registry_dir: str = "experiments/registry",
+    activate_production: bool = True,
+) -> str:
     if target_stage not in {"staging", "canary", "production"}:
         raise ValueError("target_stage must be one of: staging, canary, production")
 
@@ -97,13 +102,32 @@ def promote_run(run_id: str, target_stage: str = "production", registry_dir: str
         if r.get("run_id") == run_id:
             r["status"] = target_stage
             r["updated_utc"] = _utc_now()
-        elif target_stage == "production" and r.get("status") == "production":
+        elif target_stage == "production" and activate_production and r.get("status") == "production":
             r["status"] = "archived"
             r["updated_utc"] = _utc_now()
 
-    if target_stage == "production":
+    if target_stage == "production" and activate_production:
         idx["active_production_run_id"] = run_id
 
+    idx["runs"] = runs
+    return _save_index(registry_dir, idx)
+
+
+def activate_run(run_id: str, registry_dir: str = "experiments/registry") -> str:
+    idx = _load_index(registry_dir)
+    runs: List[Dict[str, Any]] = idx.get("runs", [])
+    if not any(r.get("run_id") == run_id for r in runs):
+        raise ValueError(f"run_id '{run_id}' not found in registry")
+
+    for r in runs:
+        if r.get("run_id") == run_id:
+            r["status"] = "production"
+            r["updated_utc"] = _utc_now()
+        elif r.get("status") == "production":
+            r["status"] = "archived"
+            r["updated_utc"] = _utc_now()
+
+    idx["active_production_run_id"] = run_id
     idx["runs"] = runs
     return _save_index(registry_dir, idx)
 

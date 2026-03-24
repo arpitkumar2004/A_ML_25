@@ -1,4 +1,4 @@
-name: Deployment
+name: Deploy Live Service
 
 permissions:
   contents: write
@@ -8,28 +8,26 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: 'Canonical local run ID to deploy (must be in production stage)'
+        description: 'Canonical local run ID approved for production deployment'
         required: true
-      deployment_strategy:
-        description: 'Deployment strategy'
+      space_repo_id:
+        description: 'Target Hugging Face Space repo ID'
         required: true
-        type: choice
-        options:
-          - canary
-          - blue_green
-        default: canary
-      canary_percent:
-        description: 'Canary traffic percentage (1-100), only for canary strategy'
+        default: 'arpitkumariitkgp/aml25'
+      create_if_missing:
+        description: 'Create the target Space if it does not already exist'
         required: false
-        default: '10'
+        type: boolean
+        default: false
 
 jobs:
   pre-deployment-checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     outputs:
       deployment_approved: ${{ steps.checks.outputs.approved }}
-      health_status: ${{ steps.checks.outputs.health_status }}
+      resolved_run_id: ${{ steps.resolve.outputs.run_id }}
+      service_base_url: ${{ steps.space.outputs.service_base_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,6 +36,24 @@ jobs:
 
       - name: Setup Python and dependencies
         uses: ./.github/actions/python-setup
+        with:
+          cache: 'true'
+
+      - name: Resolve canonical bundle-backed run id
+        id: resolve
+        run: |
+          python scripts/resolve_registry_run.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --output /tmp/resolved_deploy_run.json
+
+          RUN_ID=$(python -c "import json; print(json.load(open('/tmp/resolved_deploy_run.json', encoding='utf-8'))['resolved_run_id'])")
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
+      - name: Derive Space URL
+        id: space
+        run: |
+          SERVICE_BASE_URL="https://$(echo '${{ github.event.inputs.space_repo_id }}' | tr '/' '-').hf.space"
+          echo "service_base_url=$SERVICE_BASE_URL" >> $GITHUB_OUTPUT
 
       - name: Restore bundle from durable storage
         env:
@@ -46,7 +62,7 @@ jobs:
           BUNDLE_RELEASE_TAG_PREFIX: bundle-archive
         run: |
           python scripts/restore_training_bundle.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
+            --run-id "${{ steps.resolve.outputs.run_id }}" \
             --repo "$GITHUB_REPOSITORY" \
             --token "$GITHUB_TOKEN" \
             --output /tmp/restored_bundle.json
@@ -65,111 +81,45 @@ jobs:
 
           test -f data/raw/test.csv || (echo "Missing data/raw/test.csv after DVC pull" && exit 1)
 
-      - name: Verify production readiness
+      - name: Verify deployment readiness
         id: checks
         run: |
           python scripts/pre_deployment_checks.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
+            --run-id "${{ steps.resolve.outputs.run_id }}" \
             --output /tmp/deployment_checks.json \
             --check-tests \
             --check-coverage \
             --check-security
-          
+
           python -c "
           import json
-          with open('/tmp/deployment_checks.json') as f:
+          with open('/tmp/deployment_checks.json', encoding='utf-8') as f:
               result = json.load(f)
           print(f\"approved={'true' if result.get('all_passed') else 'false'}\")
-          print(f\"health_status={json.dumps(result.get('health_checks', {}))}\")
           " >> $GITHUB_OUTPUT
 
-      - name: Run model inference tests
+      - name: Run bundle-backed inference smoke test
         run: |
           python scripts/test_model_inference.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
+            --run-id "${{ steps.resolve.outputs.run_id }}" \
             --test-dataset data/raw/test.csv \
             --output /tmp/pre_deploy_inference.json
 
-      - name: Upload pre-deployment report
+      - name: Upload pre-deployment artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: pre-deployment-report
-          path: /tmp/deployment_checks.json
-          retention-days: 30
+          name: pre-deployment-${{ steps.resolve.outputs.run_id }}
+          path: |
+            /tmp/resolved_deploy_run.json
+            /tmp/restored_bundle.json
+            /tmp/deployment_checks.json
+            /tmp/pre_deploy_inference.json
+          retention-days: 14
 
-  build-serving-release:
+  deploy-to-hf-space:
     needs: pre-deployment-checks
     if: needs.pre-deployment-checks.outputs.deployment_approved == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    outputs:
-      service_image: ${{ steps.meta.outputs.service_image }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
-
-      - name: Setup Python and dependencies
-        uses: ./.github/actions/python-setup
-
-      - name: Restore bundle from durable storage
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          BUNDLE_RELEASE_TAG_PREFIX: bundle-archive
-        run: |
-          python scripts/restore_training_bundle.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
-            --repo "$GITHUB_REPOSITORY" \
-            --token "$GITHUB_TOKEN" \
-            --output /tmp/restored_bundle.json
-
-      - name: Set serving image metadata
-        id: meta
-        run: |
-          IMAGE_TAG="aml25-serving:${{ github.event.inputs.run_id }}"
-          echo "service_image=$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-      - name: Create deployable bundle package
-        run: |
-          python scripts/create_deployment_package.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
-            --output-dir deployments/current \
-            --service-image "${{ steps.meta.outputs.service_image }}"
-
-      - name: Build serving image
-        run: |
-          docker build \
-            -f docker/Dockerfile.serving \
-            -t "${{ steps.meta.outputs.service_image }}" \
-            .
-
-      - name: Export serving image tarball
-        run: |
-          mkdir -p /tmp/serving-release
-          docker save "${{ steps.meta.outputs.service_image }}" -o "/tmp/serving-release/${{ github.event.inputs.run_id }}-serving-image.tar"
-
-      - name: Upload serving image artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: serving-image-${{ github.event.inputs.run_id }}
-          path: /tmp/serving-release/${{ github.event.inputs.run_id }}-serving-image.tar
-          retention-days: 14
-
-      - name: Upload deployment package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: deployment-package-${{ github.event.inputs.run_id }}
-          path: deployments/current
-          retention-days: 14
-
-  canary-deployment:
-    needs: [pre-deployment-checks, build-serving-release]
-    if: |
-      github.event.inputs.deployment_strategy == 'canary' &&
-      needs.pre-deployment-checks.outputs.deployment_approved == 'true'
-    runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - name: Checkout
@@ -179,6 +129,8 @@ jobs:
 
       - name: Setup Python and dependencies
         uses: ./.github/actions/python-setup
+        with:
+          cache: 'true'
 
       - name: Restore bundle from durable storage
         env:
@@ -187,334 +139,111 @@ jobs:
           BUNDLE_RELEASE_TAG_PREFIX: bundle-archive
         run: |
           python scripts/restore_training_bundle.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
+            --run-id "${{ needs.pre-deployment-checks.outputs.resolved_run_id }}" \
             --repo "$GITHUB_REPOSITORY" \
             --token "$GITHUB_TOKEN" \
             --output /tmp/restored_bundle.json
 
-      - name: Pull green-environment test data
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
-          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
-          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+      - name: Create Hugging Face Space package
         run: |
-          if command -v dvc &> /dev/null; then
-            dvc pull -r origin data/raw/test.csv.dvc || dvc pull -r origin
-          fi
+          python scripts/create_hf_space_package.py \
+            --run-id "${{ needs.pre-deployment-checks.outputs.resolved_run_id }}" \
+            --output-dir /tmp/hf-space-package \
+            --space-repo-id "${{ github.event.inputs.space_repo_id }}" \
+            --service-image "hf-space:${{ needs.pre-deployment-checks.outputs.resolved_run_id }}"
 
-          test -f data/raw/test.csv || (echo "Missing data/raw/test.csv after DVC pull" && exit 1)
-
-      - name: Deploy canary (read config)
-        run: |
-          # For local demo: update a canary routing config
-          python -c "
-          import json
-          config = {
-              'production_run_id': '${{ github.event.inputs.run_id }}',
-              'canary_enabled': True,
-              'canary_percent': int('${{ github.event.inputs.canary_percent || 10 }}'),
-              'deployment_time': '$(date -u +%Y-%m-%dT%H:%M:%SZ)',
-              'deployed_by': '${{ github.actor }}'
-          }
-          with open('experiments/registry/canary_config.json', 'w') as f:
-              json.dump(config, f, indent=2)
-          "
-          
-          # Read the config to verify
-          cat experiments/registry/canary_config.json
-
-      - name: Record canary deployment manifest
-        run: |
-          python scripts/update_deployment_manifest.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
-            --strategy canary \
-            --manifest-path experiments/registry/deployment_manifest.json \
-            --environment production \
-            --deployed-by "${{ github.actor }}" \
-            --deployment-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --canary-percent "${{ github.event.inputs.canary_percent || 10 }}" \
-            --status canary \
-            --service-image "${{ needs.build-serving-release.outputs.service_image }}"
-
-      - name: Run canary inference smoke test
-        run: |
-          python scripts/test_model_inference.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
-            --test-dataset data/raw/test.csv \
-            --output /tmp/canary_inference.json
-
-      - name: Wait for canary warm-up (30 seconds)
-        run: sleep 30
-
-      - name: Monitor canary metrics
-        id: monitor
-        env:
-          CANARY_SERVICE_BASE_URL: ${{ secrets.CANARY_SERVICE_BASE_URL }}
-        run: |
-          if [ -n "$CANARY_SERVICE_BASE_URL" ]; then
-            python scripts/monitor_canary_metrics.py \
-              --duration 60 \
-              --sample-size 100 \
-              --service-base-url "$CANARY_SERVICE_BASE_URL" \
-              --expected-run-id "${{ github.event.inputs.run_id }}" \
-              --output /tmp/canary_metrics.json
-          else
-            python scripts/monitor_canary_metrics.py \
-              --duration 60 \
-              --sample-size 100 \
-              --metrics-input /tmp/canary_inference.json \
-              --output /tmp/canary_metrics.json
-          fi
-          
-          python -c "
-          import json
-          with open('/tmp/canary_metrics.json') as f:
-              result = json.load(f)
-          print(f\"metrics_healthy={'true' if result.get('passed') else 'false'}\")
-          " >> $GITHUB_OUTPUT
-
-      - name: Promote canary to full deployment
-        if: steps.monitor.outputs.metrics_healthy == 'true'
-        run: |
-          python -c "
-          import json
-          with open('experiments/registry/canary_config.json') as f:
-              config = json.load(f)
-          config['canary_enabled'] = False
-          config['canary_percent'] = 100
-          config['promoted_to_production_time'] = '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
-          with open('experiments/registry/canary_config.json', 'w') as f:
-              json.dump(config, f, indent=2)
-          "
-          python scripts/update_deployment_manifest.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
-            --strategy canary \
-            --manifest-path experiments/registry/deployment_manifest.json \
-            --environment production \
-            --deployed-by "${{ github.actor }}" \
-            --deployment-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --canary-percent 100 \
-            --status active \
-            --service-image "${{ needs.build-serving-release.outputs.service_image }}"
-          echo "✓ Canary promoted to full deployment"
-
-      - name: Rollback on failure
-        if: failure() || steps.monitor.outputs.metrics_healthy == 'false'
-        run: |
-          echo "Rolling back canary deployment..."
-          python scripts/rollback_deployment.py \
-            --to-previous-production \
-            --reason "Canary metrics unhealthy"
-
-      - name: Upload canary metrics
-        if: always()
+      - name: Upload generated Space package
         uses: actions/upload-artifact@v4
         with:
-          name: canary-metrics
-          path: /tmp/canary_metrics.json
-          retention-days: 7
+          name: hf-space-package-${{ needs.pre-deployment-checks.outputs.resolved_run_id }}
+          path: /tmp/hf-space-package
+          retention-days: 14
 
-      - name: Persist canary deployment state
-        if: always()
+      - name: Publish package to Hugging Face Space
+        env:
+          HF_SPACE_TOKEN: ${{ secrets.HF_SPACE_TOKEN }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin "${{ github.ref_name }}"
-          git add experiments/registry
-          if git diff --cached --quiet; then
-            echo "No canary deployment changes to commit"
-          else
-            git commit -m "ci: record canary deployment for ${{ github.event.inputs.run_id }}"
-            git push origin HEAD:${{ github.ref_name }}
+          EXTRA_ARGS=""
+          if [ "${{ github.event.inputs.create_if_missing }}" = "true" ]; then
+            EXTRA_ARGS="--create-if-missing"
           fi
 
-  blue-green-deployment:
-    needs: [pre-deployment-checks, build-serving-release]
-    if: |
-      github.event.inputs.deployment_strategy == 'blue_green' &&
-      needs.pre-deployment-checks.outputs.deployment_approved == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
+          python scripts/publish_to_hf_space.py \
+            --package-dir /tmp/hf-space-package \
+            --space-repo-id "${{ github.event.inputs.space_repo_id }}" \
+            --token "$HF_SPACE_TOKEN" \
+            --commit-message "Deploy run ${{ needs.pre-deployment-checks.outputs.resolved_run_id }} to Hugging Face Space" \
+            $EXTRA_ARGS
 
-      - name: Setup Python and dependencies
-        uses: ./.github/actions/python-setup
-
-      - name: Restore bundle from durable storage
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          BUNDLE_RELEASE_TAG_PREFIX: bundle-archive
+      - name: Wait for live service readiness
         run: |
-          python scripts/restore_training_bundle.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
-            --repo "$GITHUB_REPOSITORY" \
-            --token "$GITHUB_TOKEN" \
-            --output /tmp/restored_bundle.json
+          python scripts/wait_for_live_service.py \
+            --service-base-url "${{ needs.pre-deployment-checks.outputs.service_base_url }}" \
+            --expected-run-id "${{ needs.pre-deployment-checks.outputs.resolved_run_id }}" \
+            --timeout-seconds 900 \
+            --interval-seconds 20 \
+            --output /tmp/live_service_probe.json
 
-      - name: Pull blue-green test data
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
-          DAGSHUB_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
-          DAGSHUB_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
+      - name: Run live prediction smoke test
         run: |
-          if command -v dvc &> /dev/null; then
-            dvc pull -r origin data/raw/test.csv.dvc || dvc pull -r origin
-          fi
+          python scripts/live_service_smoke_test.py \
+            --service-base-url "${{ needs.pre-deployment-checks.outputs.service_base_url }}" \
+            --expected-run-id "${{ needs.pre-deployment-checks.outputs.resolved_run_id }}" \
+            --output /tmp/live_service_smoke.json
 
-          test -f data/raw/test.csv || (echo "Missing data/raw/test.csv after DVC pull" && exit 1)
-
-      - name: Deploy to green environment
+      - name: Record verified production state
         run: |
-          python -c "
-          import json
-          config = {
-              'production_run_id': '${{ github.event.inputs.run_id }}',
-              'active_environment': 'blue',
-              'blue_run_id': 'current_production',
-              'green_run_id': '${{ github.event.inputs.run_id }}',
-              'deployment_time': '$(date -u +%Y-%m-%dT%H:%M:%SZ)',
-              'deployed_by': '${{ github.actor }}'
-          }
-          with open('experiments/registry/blue_green_config.json', 'w') as f:
-              json.dump(config, f, indent=2)
-          "
-
-      - name: Test green environment
-        run: |
-          python scripts/test_model_inference.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
-            --test-dataset data/raw/test.csv \
-            --output /tmp/blue_green_inference.json
-
-      - name: Switch traffic to green
-        run: |
-          python -c "
-          import json
-          with open('experiments/registry/blue_green_config.json') as f:
-              config = json.load(f)
-          config['active_environment'] = 'green'
-          config['traffic_switch_time'] = '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
-          with open('experiments/registry/blue_green_config.json', 'w') as f:
-              json.dump(config, f, indent=2)
-          "
           python scripts/update_deployment_manifest.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
-            --strategy blue_green \
+            --run-id "${{ needs.pre-deployment-checks.outputs.resolved_run_id }}" \
+            --strategy hf_space \
             --manifest-path experiments/registry/deployment_manifest.json \
             --environment production \
             --deployed-by "${{ github.actor }}" \
-            --deployment-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --deployment-url "${{ needs.pre-deployment-checks.outputs.service_base_url }}" \
             --status active \
-            --service-image "${{ needs.build-serving-release.outputs.service_image }}"
-          echo "✓ Traffic switched to green (production)"
+            --service-image "hf-space:${{ needs.pre-deployment-checks.outputs.resolved_run_id }}"
 
-      - name: Rollback on failure
-        if: failure()
-        run: |
-          echo "Rolling back to blue environment..."
-          python -c "
-          import json
-          with open('experiments/registry/blue_green_config.json') as f:
-              config = json.load(f)
-          config['active_environment'] = 'blue'
-          with open('experiments/registry/blue_green_config.json', 'w') as f:
-              json.dump(config, f, indent=2)
-          "
+          python scripts/activate_production_run.py \
+            --run-id "${{ needs.pre-deployment-checks.outputs.resolved_run_id }}"
 
-      - name: Persist blue-green deployment state
-        if: always()
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin "${{ github.ref_name }}"
-          git add experiments/registry
-          if git diff --cached --quiet; then
-            echo "No blue-green deployment changes to commit"
-          else
-            git commit -m "ci: record blue-green deployment for ${{ github.event.inputs.run_id }}"
-            git push origin HEAD:${{ github.ref_name }}
-          fi
-
-  post-deployment:
-    needs: [pre-deployment-checks, build-serving-release, canary-deployment, blue-green-deployment]
-    if: |
-      always() &&
-      needs.pre-deployment-checks.outputs.deployment_approved == 'true' &&
-      (needs.canary-deployment.result == 'success' || needs.blue-green-deployment.result == 'success')
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
-
-      - name: Setup Python and dependencies
-        uses: ./.github/actions/python-setup
-
-      - name: Update production tracker
-        run: |
-          python scripts/update_deployment_manifest.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
-            --strategy "${{ github.event.inputs.deployment_strategy }}" \
-            --manifest-path experiments/registry/deployment_manifest.json \
-            --environment production \
-            --deployed-by "${{ github.actor }}" \
-            --deployment-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --status active \
-            --service-image "${{ needs.build-serving-release.outputs.service_image }}"
           python scripts/update_production_tracker.py \
-            --run-id "${{ github.event.inputs.run_id }}" \
-            --strategy "${{ github.event.inputs.deployment_strategy }}" \
+            --run-id "${{ needs.pre-deployment-checks.outputs.resolved_run_id }}" \
+            --strategy hf_space \
             --manifest-path experiments/registry/production_tracker.json \
-            --deployment-manifest-path experiments/registry/deployment_manifest.json
+            --deployment-manifest-path experiments/registry/deployment_manifest.json \
+            --metrics-input /tmp/live_service_probe.json \
+            --status active
 
-      - name: Trigger health check workflow
-        env:
-          SERVICE_BASE_URL: ${{ secrets.PRODUCTION_SERVICE_BASE_URL }}
+      - name: Validate production metrics against live service
         run: |
-          if [ -n "$SERVICE_BASE_URL" ]; then
-            python scripts/health_check.py \
-              --check-production-model \
-              --check-registry \
-              --check-inference \
-              --service-base-url "$SERVICE_BASE_URL" \
-              --output /tmp/post_deploy_health.json
-          else
-            echo "Health check workflow can be triggered separately"
-          fi
+          python scripts/validate_production_model.py \
+            --service-base-url "${{ needs.pre-deployment-checks.outputs.service_base_url }}"
 
-      - name: Notify channels
-        run: echo "Deployment notification can integrate with Slack/PagerDuty"
-
-      - name: Upload post-deployment health
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: post-deployment-health
-          path: /tmp/post_deploy_health.json
-          if-no-files-found: ignore
-          retention-days: 7
-
-      - name: Persist production tracker
+      - name: Persist verified deployment state
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin "${{ github.ref_name }}"
-          git add experiments/registry/production_tracker.json
+          git pull --rebase --autostash origin "${{ github.ref_name }}"
+          git add experiments/registry/index.json
           git add experiments/registry/deployment_manifest.json
+          git add experiments/registry/production_tracker.json
           if git diff --cached --quiet; then
-            echo "No production tracker changes to commit"
+            echo "No deployment state changes to commit"
           else
-            git commit -m "ci: update production tracker for ${{ github.event.inputs.run_id }}"
+            git commit -m "ci: deploy ${{ needs.pre-deployment-checks.outputs.resolved_run_id }} to HF Space"
             git push origin HEAD:${{ github.ref_name }}
           fi
+
+      - name: Upload live deployment verification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-deployment-${{ needs.pre-deployment-checks.outputs.resolved_run_id }}
+          path: |
+            /tmp/live_service_probe.json
+            /tmp/live_service_smoke.json
+            experiments/registry/index.json
+            experiments/registry/deployment_manifest.json
+            experiments/registry/production_tracker.json
+          if-no-files-found: ignore
+          retention-days: 30

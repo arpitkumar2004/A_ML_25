@@ -54,19 +54,28 @@ def test_training_workflow_uses_canonical_local_run_outputs() -> None:
     assert "persist_bundle_release_asset.py" in training_workflow
 
 
-def test_promotion_workflow_uses_valid_deployment_manifest_args() -> None:
+def test_promotion_workflow_separates_release_approval_from_live_deployment() -> None:
     promote_workflow = (WORKFLOWS_DIR / "promote.yml").read_text(encoding="utf-8")
-    assert "--strategy promotion" in promote_workflow
-    assert "--stage" not in promote_workflow
+    assert "resolve_registry_run.py" in promote_workflow
     assert "restore_training_bundle.py" in promote_workflow
+    assert '--activate-production "$ACTIVATE_PRODUCTION"' in promote_workflow
+    assert "update_deployment_manifest.py" not in promote_workflow
 
 
-def test_deploy_and_health_workflows_restore_bundles_from_durable_storage() -> None:
+def test_deploy_and_health_workflows_use_live_space_verification() -> None:
     deploy_workflow = (WORKFLOWS_DIR / "deploy.yml").read_text(encoding="utf-8")
     health_workflow = (WORKFLOWS_DIR / "health-check.yml").read_text(encoding="utf-8")
     publish_workflow = (WORKFLOWS_DIR / "publish-hf-space.yml").read_text(encoding="utf-8")
 
     assert "restore_training_bundle.py" in deploy_workflow
+    assert "publish_to_hf_space.py" in deploy_workflow
+    assert "live_service_smoke_test.py" in deploy_workflow
+    assert "activate_production_run.py" in deploy_workflow
+    assert "canary_config.json" not in deploy_workflow
+    assert "blue_green_config.json" not in deploy_workflow
     assert "restore_training_bundle.py" in health_workflow
     assert "resolve_active_production_run.py" in health_workflow
+    assert "live_service_smoke_test.py" in health_workflow
+    assert "auto_rollback.py" not in health_workflow
     assert "restore_training_bundle.py" in publish_workflow
+    assert "live_service_smoke_test.py" in publish_workflow

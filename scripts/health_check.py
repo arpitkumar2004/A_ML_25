@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
 from src.inference.predict import PredictPipeline
 from src.utils.deployment_state import resolve_live_deployment_state
 from src.utils.registry_loader import RegistryLoader
-from src.utils.service_probe import try_probe_live_service
+from src.utils.service_probe import try_probe_live_prediction, try_probe_live_service
 
 
 def check_mlflow(uri: str) -> Dict[str, Any]:
@@ -151,7 +151,7 @@ def check_inference(
             return result
 
         if service_base_url:
-            live = try_probe_live_service(
+            live = try_probe_live_prediction(
                 base_url=service_base_url,
                 expected_run_id=state["active_production_run_id"],
             )
