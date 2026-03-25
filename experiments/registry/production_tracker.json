@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "run_id": "train_20260315T093004Z",
+  "bundle_path": "experiments\\runs\\train_20260315T093004Z\\bundle",
+  "strategy": "hf_space",
+  "status": "active",
+  "last_updated_utc": "2026-03-25T10:39:42.2739555Z",
+  "deployment_manifest_path": "experiments/registry/deployment_manifest.json",
+  "deployment": {
+    "deployed_at_utc": "2026-03-25T10:39:42.2739555Z",
+    "environment": "production",
+    "deployed_by": "health-check-repair",
+    "deployment_url": "",
+    "service_image": "hf-space:train_20260315T093004Z",
+    "bundle_config_sha256": "bf0b8f86bce8e084c09175e22bae326572ca831fde0781ee04df46b3a2c5e182",
+    "previous_production_run_id": null
+  },
+  "registry_consistency": {
+    "active_production_run_id": "train_20260315T093004Z",
+    "entry_status": "production",
+    "entry_stage": "train",
+    "matches_active_production": true
+  },
+  "metrics": {
+    "latency_p95": 0.0,
+    "error_rate": 0.0,
+    "success_rate": 1.0
+  }
+}

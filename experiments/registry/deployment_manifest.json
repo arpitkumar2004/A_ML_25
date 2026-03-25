@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "run_id": "train_20260315T093004Z",
+  "bundle_path": "experiments\\runs\\train_20260315T093004Z\\bundle",
+  "bundle_manifest_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\manifest.json",
+  "bundle_config_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\config.json",
+  "bundle_config_sha256": "bf0b8f86bce8e084c09175e22bae326572ca831fde0781ee04df46b3a2c5e182",
+  "registry_dir": "experiments/registry",
+  "registry_manifest_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\manifest.json",
+  "registry_status": "production",
+  "registry_stage": "train",
+  "strategy": "hf_space",
+  "environment": "production",
+  "status": "active",
+  "deployed_at_utc": "2026-03-25T10:39:42.2739555Z",
+  "deployed_by": "health-check-repair",
+  "deployment_url": "",
+  "canary_percent": null,
+  "service_image": "hf-space:train_20260315T093004Z",
+  "previous_production_run_id": null,
+  "tracking": {
+    "mlflow": {
+      "enabled": false,
+      "mlflow_run_id": null,
+      "tracking_uri": "",
+      "experiment_name": "A_ML_25"
+    }
+  },
+  "bundle_validation": {
+    "bundle_path": "experiments\\runs\\train_20260315T093004Z\\bundle",
+    "valid": true,
+    "problems": [],
+    "contract": {
+      "bundle_path": "experiments\\runs\\train_20260315T093004Z\\bundle",
+      "manifest_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\manifest.json",
+      "models_dir": "experiments\\runs\\train_20260315T093004Z\\bundle\\models",
+      "oof_meta_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\oof\\model_names.joblib",
+      "stacker_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\models\\stacker.joblib",
+      "dim_cache": "experiments\\runs\\train_20260315T093004Z\\bundle\\artifacts\\dimred.joblib",
+      "feature_cache": "experiments\\runs\\train_20260315T093004Z\\bundle\\artifacts\\features.joblib",
+      "selector_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\artifacts\\feature_selector.joblib",
+      "numeric_scaler_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\artifacts\\numeric_scaler.joblib",
+      "text_vectorizer_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\artifacts\\tfidf_vectorizer.joblib",
+      "post_log_transform_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\artifacts\\post_feature_log_transform.joblib"
+    }
+  },
+  "bundle_manifest_summary": {
+    "keys": [
+      "config",
+      "created_utc",
+      "outputs",
+      "reproducibility",
+      "run_id",
+      "stage",
+      "timings_seconds"
+    ],
+    "outputs_present": [
+      "bundle",
+      "dim_cache",
+      "feature_cache",
+      "mlflow",
+      "model_registry",
+      "model_report",
+      "numeric_scaler_path",
+      "oof_path",
+      "selector_path",
+      "stacker_summary"
+    ]
+  },
+  "metadata": {
+    "repaired_from": "deployments/hf-space-smoke-fix/metadata/deployment_manifest.json"
+  }
+}
