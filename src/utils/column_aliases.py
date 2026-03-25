@@ -26,10 +26,26 @@ def _group_for(column_name: str) -> Tuple[str, ...]:
     return (column_name,)
 
 
+def _candidate_alias_names(column_name: str) -> Tuple[str, ...]:
+    candidates: List[str] = [column_name]
+
+    for group in _ALIAS_GROUPS.values():
+        for alias in group:
+            if column_name == alias or column_name.startswith(f"{alias}_"):
+                suffix = column_name[len(alias):]
+                for candidate in group:
+                    derived_name = f"{candidate}{suffix}"
+                    if derived_name not in candidates:
+                        candidates.append(derived_name)
+
+    return tuple(candidates)
+
+
 def resolve_column_name(columns: Iterable[str], requested: str) -> str:
     available = set(columns)
-    if requested in available:
-        return requested
+    for candidate in _candidate_alias_names(requested):
+        if candidate in available:
+            return candidate
     for candidate in _group_for(requested):
         if candidate in available:
             return candidate

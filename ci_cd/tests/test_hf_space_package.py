@@ -83,6 +83,10 @@ def test_create_hf_space_package_builds_docker_space_repo(tmp_path):
     assert os.path.exists(package["readme_path"])
     assert os.path.isdir(package["bundle_dir"])
     assert os.path.isdir(package["metadata_dir"])
+    assert os.path.isdir(output_dir / "frontend")
+    assert os.path.exists(output_dir / "frontend" / "index.html")
+    assert os.path.exists(output_dir / "frontend" / "dashboard.css")
+    assert os.path.exists(output_dir / "frontend" / "dashboard.js")
     assert os.path.exists(output_dir / "start-serving.sh")
     assert os.path.exists(output_dir / ".hfignore")
     assert os.path.exists(output_dir / "space_package_summary.json")
@@ -95,6 +99,7 @@ def test_create_hf_space_package_builds_docker_space_repo(tmp_path):
     assert "sdk: docker" in readme
     assert "app_port: 7860" in readme
     assert summary["run_id"] in readme
+    assert "COPY frontend /app/frontend" in dockerfile
     assert "EXPOSE 7860" in dockerfile
     assert "/app/deployment-metadata/service.env" in start_script
     assert summary_json["space_repo_id"] == "arpitkumariitkgp/aml25"

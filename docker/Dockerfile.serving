@@ -16,6 +16,7 @@ RUN python -m pip install --upgrade pip && \
     pip install --no-cache-dir -r /app/requirements.txt
 
 COPY src /app/src
+COPY frontend /app/frontend
 COPY main.py /app/main.py
 COPY docker/start-serving.sh /app/start-serving.sh
 COPY deployments/current/model-bundle /opt/model-bundle

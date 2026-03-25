@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>A_ML_25 | Multimodal Pricing Engine</title>
+  <link rel="stylesheet" href="/frontend/dashboard.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-title">
+      <!-- <div class="topbar-kicker">MLOps System Console</div> -->
+      <h1>A_ML_25: Multimodal Pricing Engine</h1>
+    </div>
+    <div class="topbar-badges">
+      <div class="badge badge-status">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="apiStatusText">Status: Checking</span>
+      </div>
+      <div class="badge"><span class="badge-label">Bundle</span><span class="badge-value" id="activeRunId">unknown</span></div>
+      <div class="badge"><span class="badge-label">Environment</span><span class="badge-value" id="environmentTag">PRODUCTION</span></div>
+      <div class="badge"><span class="badge-label">p95 Latency</span><span class="badge-value" id="p95Latency">0 ms</span></div>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <aside class="left-pane pane">
+      <div class="section-head">
+        <div class="eyebrow">Input Controls</div>
+        <h2>Execute Serving Pipeline</h2>
+        <p>Keep the interaction simple. Feed the multimodal payload on the left and inspect the full system behavior on the right.</p>
+      </div>
+
+      <div class="input-stack">
+        <div class="field">
+          <label for="catalogContent">Catalog Description</label>
+          <textarea id="catalogContent" class="catalog-box"></textarea>
+        </div>
+
+        <div class="field">
+          <label for="imageUrl">Image URL</label>
+          <input id="imageUrl" type="text" placeholder="https://..." />
+        </div>
+
+        <div class="thumbnail-card">
+          <img id="imagePreview" alt="Image preview" />
+          <div class="thumbnail-empty" id="imageFallback">
+            <strong>No preview</strong>
+            A valid URL renders here. Broken URLs let you demo fallback safety.
+          </div>
+        </div>
+
+        <div class="triple-grid">
+          <div class="field">
+            <label for="sampleId">Sample ID</label>
+            <input id="sampleId" type="number" value="1001" />
+          </div>
+          <div class="field">
+            <label for="numericValue">Value</label>
+            <input id="numericValue" type="number" step="0.001" />
+          </div>
+          <div class="field">
+            <label for="unitText">Unit</label>
+            <input id="unitText" type="text" />
+          </div>
+        </div>
+
+        <div class="double-grid">
+          <div class="field">
+            <label for="categoryText">Category</label>
+            <input id="categoryText" type="text" />
+          </div>
+          <div class="field">
+            <label for="referencePrice">Reference Price</label>
+            <input id="referencePrice" type="number" step="0.001" />
+          </div>
+        </div>
+
+        <label class="toggle-row" for="simulateBroken">
+          <input id="simulateBroken" type="checkbox" />
+          <span>Simulate Broken Image URL (Test Fallback)</span>
+        </label>
+
+        <div class="action-stack">
+          <button class="btn btn-primary" id="runBtn" type="button">Execute Serving Pipeline</button>
+          <button class="btn btn-secondary" id="sampleBtn" type="button">Load Smoke Test Sample</button>
+        </div>
+
+        <details class="payload-panel">
+          <summary>Inspect Request Payload</summary>
+          <pre id="payloadPreview" class="code-box"></pre>
+        </details>
+      </div>
+    </aside>
+
+    <section class="right-pane pane">
+      <div class="hero-panel">
+        <div class="hero-copy">
+          <div class="eyebrow">Live Execution</div>
+          <h2>Serving Command Center</h2>
+          <p id="predictionMeta">Ready for execution. The console will stream pipeline steps here.</p>
+          <div class="insight-strip">
+            <div class="mini-stat"><span>Schema</span><strong id="schemaSummary">aligned on demand</strong></div>
+            <div class="mini-stat"><span>Feature Width</span><strong id="featureWidthView">--</strong></div>
+            <div class="mini-stat"><span>Base Models</span><strong id="modelCountView">--</strong></div>
+            <div class="mini-stat"><span>Fallback State</span><strong id="fallbackStateView">waiting</strong></div>
+          </div>
+        </div>
+        <div class="hero-metric">
+          <div class="hero-label">Predicted Price</div>
+          <div class="hero-price" id="predictedPrice">$--</div>
+          <div class="hero-subgrid">
+            <div class="mini-stat"><span>Reference</span><strong id="referenceView">--</strong></div>
+            <div class="mini-stat"><span>Delta</span><strong id="deltaView">--</strong></div>
+            <div class="mini-stat"><span>Variant</span><strong id="variantView">--</strong></div>
+            <div class="mini-stat"><span>Canary MAE</span><strong id="canaryView">--</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <section class="terminal-panel is-hidden" id="terminalPanel">
+        <div class="terminal-head">
+          <div class="terminal-title">Execution Trace</div>
+          <div class="terminal-meta" id="terminalStatus">Awaiting pipeline run</div>
+        </div>
+        <div class="terminal-body" id="terminalBody"></div>
+      </section>
+
+      <section class="details-panel">
+        <div class="tabs" role="tablist" aria-label="Explainability tabs">
+          <button class="tab is-active" data-tab="schema" type="button">Schema &amp; Trace</button>
+          <button class="tab" data-tab="ensemble" type="button">Ensemble Breakdown</button>
+          <button class="tab" data-tab="parsed" type="button">Parsed Features</button>
+          <button class="tab" data-tab="system" type="button">System Telemetry</button>
+        </div>
+
+        <div class="tab-panels">
+          <section class="tab-panel is-active" data-panel="schema">
+            <div id="schemaTable" class="table-card"></div>
+          </section>
+          <section class="tab-panel" data-panel="ensemble">
+            <div id="ensembleTable" class="table-card"></div>
+          </section>
+          <section class="tab-panel" data-panel="parsed">
+            <div id="parsedTable" class="table-card"></div>
+          </section>
+          <section class="tab-panel" data-panel="system">
+            <div class="system-grid">
+              <div class="system-card"><span>Live Target Schema</span><strong id="schemaView">sample_id, catalog_content, image_link</strong></div>
+              <div class="system-card"><span>Feature Shape</span><strong id="featureShapeView">(1, --)</strong></div>
+              <div class="system-card"><span>Total API Invocations</span><strong id="requestsCount">0</strong></div>
+              <div class="system-card"><span>Error Rate</span><strong id="errorRate">0.00%</strong></div>
+              <div class="system-card"><span>Feature Fallback Rate</span><strong id="fallbackRate">0.00%</strong></div>
+              <div class="system-card"><span>Batch Quality Checks Passed</span><strong id="dqPassRate">0.00%</strong></div>
+            </div>
+            <div class="meter-grid">
+              <div class="meter-card"><div class="meter-label">Image Fallback</div><div class="meter"><span id="imageFallbackBar"></span></div></div>
+              <div class="meter-card"><div class="meter-label">Text Fallback</div><div class="meter"><span id="textFallbackBar"></span></div></div>
+              <div class="meter-card"><div class="meter-label">Error Rate</div><div class="meter"><span id="errorRateBar"></span></div></div>
+              <div class="meter-card"><div class="meter-label">DQ Pass Rate</div><div class="meter"><span id="dqPassBar"></span></div></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="raw-grid">
+          <details class="payload-panel">
+            <summary>Raw Diagnostics JSON</summary>
+            <pre id="rawTraceBox" class="code-box"></pre>
+          </details>
+          <details class="payload-panel">
+            <summary>Live Service Snapshot</summary>
+            <pre id="serviceSnapshotBox" class="code-box"></pre>
+          </details>
+        </div>
+      </section>
+
+      <footer class="footer-panel">
+        <div class="footer-links">
+          <a class="footer-link" id="bundleLink" target="_blank" rel="noreferrer">View Immutable Bundle</a>
+          <a class="footer-link" id="mlflowLink" target="_blank" rel="noreferrer">View Training Lineage</a>
+          <a class="footer-link" id="manifestLink" target="_blank" rel="noreferrer">View Deployment Manifest</a>
+        </div>
+        <div class="lineage-map">
+          <div>GitHub push</div>
+          <div>GitHub Actions</div>
+          <div>DVC pull data</div>
+          <div>Train model</div>
+          <div>Immutable bundle</div>
+          <div>Docker build</div>
+          <div>HF Spaces deploy</div>
+        </div>
+      </footer>
+    </section>
+  </main>
+
+  <script src="/frontend/dashboard.js"></script>
+</body>
+</html>

@@ -6,6 +6,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from ..utils.io import IO
 from ..utils.logging_utils import LoggerFactory
+from ..utils.column_aliases import resolve_column_name
 
 logger = LoggerFactory.get("numeric_features")
 
@@ -49,6 +50,11 @@ class NumericBuilder:
                 raise RuntimeError("numeric_cols not provided and scaler artifact lacks fitted numeric_cols.")
             numeric_cols = list(self.numeric_cols_)
 
-        X = df[numeric_cols].fillna(0.0).astype(float).values
+        resolved_numeric_cols = [resolve_column_name(df.columns, col) for col in numeric_cols]
+        missing_cols = [requested for requested, resolved in zip(numeric_cols, resolved_numeric_cols) if resolved not in df.columns]
+        if missing_cols:
+            raise KeyError(f"Missing numeric columns after alias resolution: {missing_cols}")
+
+        X = df[resolved_numeric_cols].fillna(0.0).astype(float).values
         Xs = self.scaler.transform(X)
-        return Xs, list(numeric_cols)
+        return Xs, list(resolved_numeric_cols)

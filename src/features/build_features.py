@@ -150,6 +150,7 @@ class FeatureBuilder:
 
         # 1) Text embeddings
         texts = df[text_col].fillna("").astype(str).tolist()
+        text_blank_rows = int(sum(1 for t in texts if not str(t).strip()))
         text_fp = stable_hash({"mode": mode, "texts": hash_texts(texts), "method": self.text_embedder.method})
         if mode == "train":
             X_text = self.text_embedder.fit_transform(texts, use_cache=use_sub_cache, fingerprint=text_fp)
@@ -162,6 +163,7 @@ class FeatureBuilder:
             image_fp = stable_hash({"mode": mode, "images": hash_texts(image_paths), "model": self.image_embedder.model_name})
             X_image = self.image_embedder.embed(image_paths, use_cache=use_sub_cache, fingerprint=image_fp)
         else:
+            image_paths = []
             X_image = np.zeros((len(df), 512), dtype=float)  # fallback
 
         # Guard against stale caches producing mismatched row counts.
@@ -205,6 +207,10 @@ class FeatureBuilder:
             X = np.concatenate([X_text, X_image, X_num], axis=1)
             logger.info("Built dense stacked feature matrix")
 
+        image_zero_rows = 0
+        if isinstance(X_image, np.ndarray) and X_image.ndim == 2 and X_image.shape[0] == len(df):
+            image_zero_rows = int(np.sum(np.linalg.norm(X_image, axis=1) <= 1e-12))
+
         selection_meta = {"enabled": self.selector_enabled, "applied": False}
         if self.selector_enabled:
             if mode == "train":
@@ -231,6 +237,11 @@ class FeatureBuilder:
             "post_log_transform": post_log_meta,
             "feature_fingerprint": feature_fp,
             "mode": mode,
+            "text_method": self.text_embedder.method,
+            "text_blank_rows": text_blank_rows,
+            "image_backend": getattr(self.image_embedder, "_backend", None) or "zero-fallback",
+            "image_model_name": self.image_embedder.model_name,
+            "image_zero_rows": image_zero_rows,
         }
 
         # cache

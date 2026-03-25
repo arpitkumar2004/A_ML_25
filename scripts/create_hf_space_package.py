@@ -92,6 +92,7 @@ RUN python -m pip install --upgrade pip && \\
     pip install --no-cache-dir -r /app/requirements.txt
 
 COPY src /app/src
+COPY frontend /app/frontend
 COPY main.py /app/main.py
 COPY start-serving.sh /app/start-serving.sh
 COPY model-bundle /opt/model-bundle
@@ -151,6 +152,7 @@ def create_hf_space_package(
         )
 
         _copy_required_tree(ROOT / "src", output_root / "src")
+        _copy_required_tree(ROOT / "frontend", output_root / "frontend")
         shutil.copy2(ROOT / "main.py", output_root / "main.py")
         shutil.copy2(ROOT / "requirements.txt", output_root / "requirements.txt")
         _copy_required_tree(Path(base_release["bundle_output_dir"]), output_root / "model-bundle")

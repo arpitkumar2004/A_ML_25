@@ -226,7 +226,14 @@ class PredictPipeline:
         pad = np.zeros((X_np.shape[0], expected - current), dtype=X_np.dtype)
         return np.hstack([X_np, pad])
 
-    def predict(self, df: pd.DataFrame, text_col: str = "catalog_content", image_col: str = "image_link", force_rebuild_features: bool = False):
+    def predict(
+        self,
+        df: pd.DataFrame,
+        text_col: str = "catalog_content",
+        image_col: str = "image_link",
+        force_rebuild_features: bool = False,
+        return_diagnostics: bool = False,
+    ):
         """
         Input: df with same schema as training (unique_identifier, Description, Price optional, image_path optional)
         Returns: numpy array of final predictions (same order as df)
@@ -234,7 +241,8 @@ class PredictPipeline:
         if df is None or len(df) == 0:
             raise ValueError("Empty dataframe passed to PredictPipeline.predict")
 
-        df, _ = normalize_to_train_schema(df)
+        incoming_columns = list(df.columns)
+        df, rename_map = normalize_to_train_schema(df)
         text_col = resolve_column_name(df.columns, text_col)
         image_col = resolve_column_name(df.columns, image_col)
 
@@ -284,4 +292,66 @@ class PredictPipeline:
             # average base models
             final_preds = df_base_preds.mean(axis=1).values
 
-        return final_preds
+        if not return_diagnostics:
+            return final_preds
+
+        parsed_signals: Dict[str, Any] = {}
+        if len(df):
+            first_row = df.iloc[0]
+            parsed_signals = {
+                "parsed_value": float(first_row.get("parsed_value", 0.0) or 0.0),
+                "parsed_unit": str(first_row.get("parsed_unit", "") or ""),
+                "parsed_ounces": float(first_row.get("parsed_ounces", 0.0) or 0.0),
+                "quantity_mentions": int(first_row.get("parsed_quantity_mentions", 0.0) or 0.0),
+                "total_weight_g": float(first_row.get("parsed_total_weight_g", 0.0) or 0.0),
+                "total_volume_ml": float(first_row.get("parsed_total_volume_ml", 0.0) or 0.0),
+                "total_count_units": float(first_row.get("parsed_total_count_units", 0.0) or 0.0),
+            }
+
+        diagnostics = {
+            "schema_alignment": {
+                "rename_map": rename_map,
+                "original_columns": incoming_columns,
+                "normalized_columns": list(df.columns),
+                "resolved_text_col": text_col,
+                "resolved_image_col": image_col,
+            },
+            "feature_matrix": {
+                "raw_shape": list(X_raw.shape) if hasattr(X_raw, "shape") else None,
+                "final_shape": list(X_final.shape) if hasattr(X_final, "shape") else None,
+                "text_shape": list(meta.get("text_shape", [])),
+                "image_shape": list(meta.get("image_shape", [])),
+                "numeric_shape": list(meta.get("numeric_shape", [])),
+                "selection": meta.get("selection"),
+                "post_log_transform": meta.get("post_log_transform"),
+            },
+            "feature_extraction": {
+                "text": {
+                    "method": meta.get("text_method"),
+                    "dimensions": int(meta["text_shape"][1]) if len(meta.get("text_shape", ())) > 1 else 0,
+                    "blank_rows": int(meta.get("text_blank_rows", 0)),
+                },
+                "image": {
+                    "backend": meta.get("image_backend"),
+                    "model_name": meta.get("image_model_name"),
+                    "dimensions": int(meta["image_shape"][1]) if len(meta.get("image_shape", ())) > 1 else 0,
+                    "zero_rows": int(meta.get("image_zero_rows", 0)),
+                },
+                "numeric": {
+                    "columns": list(meta.get("numeric_cols", [])),
+                    "dimensions": int(meta["numeric_shape"][1]) if len(meta.get("numeric_shape", ())) > 1 else 0,
+                },
+            },
+            "parsed_signals": parsed_signals,
+            "ensemble": {
+                "base_model_count": int(len(df_base_preds.columns)),
+                "base_model_names": list(df_base_preds.columns),
+                "base_model_outputs": {
+                    key: float(value) for key, value in df_base_preds.iloc[0].to_dict().items()
+                } if len(df_base_preds) else {},
+                "stacker_enabled": bool(self._stacker is not None),
+                "stacker_path": self.stacker_path if self._stacker is not None else None,
+                "final_prediction": float(final_preds[0]) if len(final_preds) else None,
+            },
+        }
+        return final_preds, diagnostics

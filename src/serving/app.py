@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ..inference.predict import PredictPipeline
@@ -30,6 +31,9 @@ _SERVICE_METRICS = {
     "fallback_image_rows": 0,
     "fallback_text_rows": 0,
     "predict_rows": 0,
+    "dq_pass_count": 0,
+    "dq_reject_count": 0,
+    "dq_quarantine_count": 0,
 }
 
 
@@ -58,6 +62,51 @@ def _load_env_file() -> None:
     if hf_token:
         os.environ.setdefault("HF_TOKEN", hf_token)
         os.environ.setdefault("HUGGING_FACE_HUB_TOKEN", hf_token)
+
+
+def _load_frontend_html() -> str:
+    frontend_path = Path(__file__).resolve().parents[2] / "frontend" / "index.html"
+    if frontend_path.exists():
+        return frontend_path.read_text(encoding="utf-8")
+
+    logger.warning("frontend_index_missing path=%s", frontend_path)
+    return """<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8" /><title>A_ML_25 UI Missing</title></head>
+<body style="font-family: Arial, sans-serif; padding: 24px;">
+<h1>Frontend file missing</h1>
+<p>The app expected <code>frontend/index.html</code> next to the project root.</p>
+</body>
+</html>"""
+
+
+def _github_repo_url() -> str:
+    return os.getenv("GITHUB_REPO_URL", "https://github.com/arpitkumar2004/A_ML_25").rstrip("/")
+
+
+def _dagshub_repo_url() -> str:
+    configured = os.getenv("DAGSHUB_REPO_URL", "").strip()
+    if configured:
+        return configured.rstrip("/")
+
+    host = str(os.getenv("DAGSHUB_HOST", "https://dagshub.com")).strip().rstrip("/")
+    owner = str(os.getenv("DAGSHUB_REPO_OWNER", "arpitkumar2004")).strip()
+    repo = str(os.getenv("DAGSHUB_REPO_NAME", "A_ML_25")).strip()
+    if owner and repo:
+        return f"{host}/{owner}/{repo}"
+    return host
+
+
+def _mlflow_run_url(tracking_uri: str, run_id: Optional[str]) -> str:
+    base = str(tracking_uri or "").strip().rstrip("/")
+    if not base:
+        return ""
+    if not run_id:
+        return base
+    return (
+        f"{base}/#/experiments?"
+        f"searchFilter=&orderByKey=attributes.start_time&orderByAsc=false&startTime=ALL&runId={run_id}"
+    )
 
 
 class PredictRequest(BaseModel):
@@ -297,12 +346,38 @@ class ModelService:
         self.pipeline._load_stacker()
 
     def deployment_state(self) -> Dict[str, Any]:
+        registry_entry: Dict[str, Any] = {}
+        try:
+            if self.primary_run_id:
+                registry_entry = RegistryLoader(registry_dir=self.registry_dir).get_run_by_id(self.primary_run_id) or {}
+        except Exception:
+            registry_entry = {}
+
+        tracking = registry_entry.get("tracking", {}) if isinstance(registry_entry, dict) else {}
+        mlflow_meta = tracking.get("mlflow", {}) if isinstance(tracking, dict) else {}
+        mlflow_run_id = str(mlflow_meta.get("mlflow_run_id") or self.primary_run_id or "")
+        tracking_uri = str(mlflow_meta.get("tracking_uri") or os.getenv("MLFLOW_TRACKING_URI", "")).strip()
+        environment_label = f"CANARY: {self.canary_percent:.0f}%" if self.canary_enabled and self.canary_percent > 0 else "PRODUCTION"
+
         return {
             "ready": self.ready,
             "reason": self.ready_reason,
+            "api_status": "Healthy (Serving)" if self.ready else "Degraded",
+            "environment": environment_label,
             "registry_dir": self.registry_dir,
             "run_id": self.primary_run_id,
             "bundle_path": self.primary_bundle_path,
+            "tracking": {
+                "mlflow_run_id": mlflow_run_id or None,
+                "tracking_uri": tracking_uri or None,
+                "experiment_name": mlflow_meta.get("experiment_name"),
+            },
+            "links": {
+                "dagshub_repo": _dagshub_repo_url(),
+                "github_repo": _github_repo_url(),
+                "github_actions": f"{_github_repo_url()}/actions",
+                "mlflow_run": _mlflow_run_url(tracking_uri=tracking_uri, run_id=mlflow_run_id),
+            },
             "canary": {
                 "enabled": self.canary_enabled,
                 "percent": self.canary_percent,
@@ -315,6 +390,11 @@ class ModelService:
 
 service = ModelService()
 app = FastAPI(title="A_ML_25 Inference Service", version="1.0.0")
+app.mount(
+    "/frontend",
+    StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "frontend")),
+    name="frontend",
+)
 
 
 @app.middleware("http")
@@ -359,7 +439,8 @@ def on_startup():
 
 @app.get("/", response_class=HTMLResponse)
 def root():
-        return """
+    return _load_frontend_html()
+    """
 <!doctype html>
 <html lang="en">
 <head>
@@ -516,10 +597,15 @@ def metrics_json():
     p50 = float(np.percentile(lat, 50)) if lat.size else 0.0
     p95 = float(np.percentile(lat, 95)) if lat.size else 0.0
     p99 = float(np.percentile(lat, 99)) if lat.size else 0.0
+    requests_total = max(int(_SERVICE_METRICS["request_count"]), 1)
+    predict_rows = max(int(_SERVICE_METRICS["predict_rows"]), 1)
+    dq_total = int(_SERVICE_METRICS["dq_pass_count"] + _SERVICE_METRICS["dq_reject_count"] + _SERVICE_METRICS["dq_quarantine_count"])
+    dq_total_safe = max(dq_total, 1)
     return {
         "request_count": int(_SERVICE_METRICS["request_count"]),
         "error_count": int(_SERVICE_METRICS["error_count"]),
         "predict_count": int(_SERVICE_METRICS["predict_count"]),
+        "error_rate": float(_SERVICE_METRICS["error_count"]) / requests_total,
         "service": service.deployment_state(),
         "latency_ms": {"p50": p50, "p95": p95, "p99": p99},
         "canary": {
@@ -531,6 +617,14 @@ def metrics_json():
             "image_rows": int(_SERVICE_METRICS["fallback_image_rows"]),
             "text_rows": int(_SERVICE_METRICS["fallback_text_rows"]),
             "predict_rows": int(_SERVICE_METRICS["predict_rows"]),
+            "image_rate": float(_SERVICE_METRICS["fallback_image_rows"]) / predict_rows,
+            "text_rate": float(_SERVICE_METRICS["fallback_text_rows"]) / predict_rows,
+        },
+        "data_quality": {
+            "passed": int(_SERVICE_METRICS["dq_pass_count"]),
+            "rejected": int(_SERVICE_METRICS["dq_reject_count"]),
+            "quarantined": int(_SERVICE_METRICS["dq_quarantine_count"]),
+            "pass_rate": float(_SERVICE_METRICS["dq_pass_count"]) / dq_total_safe,
         },
     }
 
@@ -629,18 +723,22 @@ def predict(req: PredictRequest):
         }
         dq_result = validate_batch_quality(df, dq_rules)
         if dq_result.get("policy") == "reject":
+            _SERVICE_METRICS["dq_reject_count"] += 1
             raise HTTPException(status_code=422, detail={"error": "data_quality_reject", "dq": dq_result})
         if dq_result.get("policy") == "quarantine":
+            _SERVICE_METRICS["dq_quarantine_count"] += 1
             quarantine_path = os.getenv("SERVING_QUARANTINE_PATH", "experiments/quarantine/serving_quarantine.csv")
             IO.to_csv(df, quarantine_path, index=False)
             raise HTTPException(status_code=422, detail={"error": "data_quality_quarantine", "dq": dq_result, "path": quarantine_path})
+        _SERVICE_METRICS["dq_pass_count"] += 1
 
         primary_pipeline, variant = service.choose_pipeline()
-        preds = primary_pipeline.predict(
+        preds, trace = primary_pipeline.predict(
             df,
             text_col=req.text_col,
             image_col=req.image_col,
             force_rebuild_features=True,
+            return_diagnostics=True,
         )
         _SERVICE_METRICS["predict_count"] += 1
 
@@ -666,8 +764,18 @@ def predict(req: PredictRequest):
 
         if req.id_col in df.columns:
             out_df = Postprocessor.to_submission_df(df[req.id_col].values, preds, id_col=req.id_col, pred_col=req.pred_col)
-            return {"predictions": out_df.to_dict(orient="records"), "model_variant": variant, "canary_divergence_mae": divergence}
-        return {"predictions": preds.tolist(), "model_variant": variant, "canary_divergence_mae": divergence}
+            return {
+                "predictions": out_df.to_dict(orient="records"),
+                "model_variant": variant,
+                "canary_divergence_mae": divergence,
+                "trace": trace,
+            }
+        return {
+            "predictions": preds.tolist(),
+            "model_variant": variant,
+            "canary_divergence_mae": divergence,
+            "trace": trace,
+        }
     except Exception as exc:
         _SERVICE_METRICS["error_count"] += 1
         if isinstance(exc, HTTPException):
