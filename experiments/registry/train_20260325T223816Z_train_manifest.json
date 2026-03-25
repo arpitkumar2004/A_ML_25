@@ -1,0 +1,163 @@
+{
+  "run_id": "train_20260325T223816Z",
+  "stage": "train",
+  "created_utc": "2026-03-25T22:42:50.359090+00:00",
+  "reproducibility": {
+    "config_sha256": "855e3ff9b84c3cb893bbbff6efa0e4082ee3790ebf7a04c45b6432ada1557fd3",
+    "pythonhashseed": "",
+    "seed": 42
+  },
+  "config": {
+    "run_full_training": true,
+    "data_path": "data/interim/train_prepared.csv",
+    "sample_frac": 0.01,
+    "target_col": "price",
+    "text_col": "catalog_content",
+    "image_col": "image_link",
+    "id_col": "sample_id",
+    "models": [
+      "Linear",
+      "RF",
+      "LGBM",
+      "XGB",
+      "CatBoost"
+    ],
+    "feature_cache": "data/processed/features.joblib",
+    "dim_cache": "data/processed/dimred.joblib",
+    "use_dim_cache": true,
+    "registry_dir": "experiments/registry",
+    "selector_cfg": {
+      "enabled": true,
+      "method": "f_regression",
+      "k": 512,
+      "min_features": 128,
+      "save_path": "data/processed/feature_selector.joblib",
+      "random_state": 42
+    },
+    "post_log_cfg": {
+      "enabled": true,
+      "alpha": 0.01,
+      "min_skew": 1.0,
+      "min_samples": 30,
+      "max_test_rows": 50000,
+      "save_path": "data/processed/post_feature_log_transform.joblib",
+      "random_state": 42
+    },
+    "trainer": {
+      "n_splits": 5,
+      "random_state": 42
+    },
+    "stacker": {
+      "run_stacker": true,
+      "method": "ridge",
+      "n_splits": 5,
+      "params": {
+        "alpha": 1.0
+      }
+    },
+    "quality_gates": {
+      "max_smape": 30.0,
+      "max_p95_latency_seconds": 5.0,
+      "max_critical_drift_features": 0
+    },
+    "mlflow": {
+      "enabled": true,
+      "tracking_uri": "",
+      "experiment_name": "A_ML_25_final_training",
+      "model_registry": {
+        "enabled": true,
+        "name": "A_ML_25_final_models"
+      },
+      "dagshub": {
+        "enabled": true,
+        "repo_owner": "arpitkumar2004",
+        "repo_name": "A_ML_25",
+        "host": "https://dagshub.com"
+      }
+    },
+    "n_splits": 5,
+    "random_state": 42,
+    "stratify": false,
+    "run_stacker": true,
+    "stacker_method": "ridge",
+    "stacker_n_splits": 5,
+    "stacker_params": {
+      "alpha": 1.0
+    },
+    "run_id": "train_20260325T223816Z",
+    "bundle_path": "experiments/runs/train_20260325T223816Z/bundle",
+    "text_cfg": {
+      "method": "sbert",
+      "model_name": "all-MiniLM-L6-v2",
+      "cache_path": "data/processed/text_embeddings.joblib",
+      "vectorizer_path": "data/processed/tfidf_vectorizer.joblib"
+    },
+    "image_cfg": {
+      "cache_path": "data/processed/image_embeddings.joblib"
+    },
+    "numeric_cfg": {
+      "scaler_path": "data/processed/numeric_scaler.joblib"
+    },
+    "models_out": "experiments/runs/train_20260325T223816Z/bundle/models",
+    "oof_out": "experiments/runs/train_20260325T223816Z/bundle/oof",
+    "reports_dir": "experiments/runs/train_20260325T223816Z/bundle/reports",
+    "report_out": "experiments/runs/train_20260325T223816Z/bundle/reports/model_comparison.joblib",
+    "report_csv": "experiments/runs/train_20260325T223816Z/bundle/reports/model_comparison.csv",
+    "dim_meta_out": "experiments/runs/train_20260325T223816Z/bundle/reports/dim_meta.joblib",
+    "target_transform": "log1p",
+    "target_skew_meta": {
+      "applied": true,
+      "p_value": 8.402757745457927e-197,
+      "skew": 10.137520332825485,
+      "alpha": 0.01,
+      "min_skew": 1.0,
+      "method": "skewtest+log1p",
+      "tested_rows": 750
+    }
+  },
+  "outputs": {
+    "model_report": "experiments/runs/train_20260325T223816Z/bundle/reports/model_comparison.csv",
+    "oof_path": "experiments/runs/train_20260325T223816Z/bundle/oof/oof_matrix.joblib",
+    "dim_cache": "experiments/runs/train_20260325T223816Z/bundle/artifacts/dimred.joblib",
+    "feature_cache": "experiments/runs/train_20260325T223816Z/bundle/artifacts/features.joblib",
+    "selector_path": "experiments/runs/train_20260325T223816Z/bundle/artifacts/feature_selector.joblib",
+    "numeric_scaler_path": "experiments/runs/train_20260325T223816Z/bundle/artifacts/numeric_scaler.joblib",
+    "stacker_summary": "experiments/runs/train_20260325T223816Z/bundle/reports/stacker_summary.joblib",
+    "mlflow": {
+      "enabled": true,
+      "mlflow_run_id": "dc5d62392fd64677aaa2a6c7d7a21096",
+      "tracking_uri": "https://dagshub.com/arpitkumar2004/A_ML_25.mlflow",
+      "experiment_name": "A_ML_25_final_training"
+    },
+    "model_registry": {
+      "enabled": true,
+      "registered": true,
+      "registered_model_name": "A_ML_25_final_models",
+      "version": "16",
+      "model_uri": "models:/m-5d57081f117848d684f53d94d63eb83f",
+      "artifact_path": "models/cat",
+      "error": ""
+    },
+    "bundle": {
+      "bundle_path": "experiments/runs/train_20260325T223816Z/bundle",
+      "manifest_path": "experiments/runs/train_20260325T223816Z/bundle/manifest.json",
+      "config_path": "experiments/runs/train_20260325T223816Z/bundle/config.json",
+      "models_dir": "experiments/runs/train_20260325T223816Z/bundle/models",
+      "oof_dir": "experiments/runs/train_20260325T223816Z/bundle/oof",
+      "oof_meta_path": "experiments/runs/train_20260325T223816Z/bundle/oof/model_names.joblib",
+      "reports_dir": "experiments/runs/train_20260325T223816Z/bundle/reports",
+      "artifacts_dir": "experiments/runs/train_20260325T223816Z/bundle/artifacts",
+      "stacker_path": "experiments/runs/train_20260325T223816Z/bundle/models/stacker.joblib",
+      "text_vectorizer_path": "experiments/runs/train_20260325T223816Z/bundle/artifacts/tfidf_vectorizer.joblib",
+      "post_log_transform_path": "experiments/runs/train_20260325T223816Z/bundle/artifacts/post_feature_log_transform.joblib"
+    }
+  },
+  "timings_seconds": {
+    "load_data": 0.7642,
+    "parse_features": 0.2703,
+    "build_features": 212.3919,
+    "dimensionality": 9.927,
+    "train_and_eval": 49.257,
+    "total": 273.4564
+  }
+}
