@@ -517,16 +517,16 @@
       "run_id": "train_20260325T155219Z",
       "manifest_path": "experiments/runs/train_20260325T155219Z/bundle/manifest.json",
       "stage": "promotion",
-      "status": "staging",
+      "status": "production",
       "tracking": {
         "promoted_by": "arpitkumar2004",
-        "promotion_time": "2026-03-25T16:39:08.402036",
-        "promotion_url": "https://github.com/arpitkumar2004/A_ML_25/actions/runs/23552377024",
-        "target_stage": "staging"
+        "promotion_time": "2026-03-25T17:08:07.354095",
+        "promotion_url": "https://github.com/arpitkumar2004/A_ML_25/actions/runs/23553499223",
+        "target_stage": "production"
       },
       "bundle_path": "experiments/runs/train_20260325T155219Z/bundle",
       "created_utc": "2026-03-25T15:56:58.075473+00:00",
-      "updated_utc": "2026-03-25T16:39:08.403191+00:00"
+      "updated_utc": "2026-03-25T17:08:07.355232+00:00"
     }
   ],
   "active_production_run_id": "train_20260315T093004Z"
