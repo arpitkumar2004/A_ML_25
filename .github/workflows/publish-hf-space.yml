@@ -103,6 +103,10 @@ jobs:
           python scripts/live_service_smoke_test.py \
             --service-base-url "$SPACE_URL" \
             --expected-run-id "${{ steps.resolve.outputs.run_id }}" \
+            --service-timeout-seconds 20 \
+            --prediction-timeout-seconds 180 \
+            --retries 3 \
+            --retry-delay-seconds 20 \
             --output /tmp/hf-space-smoke.json
 
       - name: Upload Space health result

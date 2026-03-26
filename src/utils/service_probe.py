@@ -95,6 +95,8 @@ def probe_live_prediction(
     base_url: str,
     expected_run_id: Optional[str] = None,
     timeout_seconds: float = 10.0,
+    service_timeout_seconds: Optional[float] = None,
+    prediction_timeout_seconds: Optional[float] = None,
     sample_payload: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     payload = sample_payload or {
@@ -113,12 +115,28 @@ def probe_live_prediction(
         "round": True,
     }
 
+    effective_service_timeout = (
+        float(service_timeout_seconds)
+        if service_timeout_seconds is not None
+        else float(timeout_seconds)
+    )
+    effective_prediction_timeout = (
+        float(prediction_timeout_seconds)
+        if prediction_timeout_seconds is not None
+        else float(timeout_seconds)
+    )
+
     service_probe = probe_live_service(
         base_url=base_url,
         expected_run_id=expected_run_id,
-        timeout_seconds=timeout_seconds,
+        timeout_seconds=effective_service_timeout,
     )
-    prediction_response = post_json(base_url, "/v1/predict", payload=payload, timeout_seconds=timeout_seconds)
+    prediction_response = post_json(
+        base_url,
+        "/v1/predict",
+        payload=payload,
+        timeout_seconds=effective_prediction_timeout,
+    )
 
     errors = list(service_probe.get("errors", []))
     predictions = prediction_response.get("predictions")
@@ -140,6 +158,8 @@ def try_probe_live_prediction(
     base_url: str,
     expected_run_id: Optional[str] = None,
     timeout_seconds: float = 10.0,
+    service_timeout_seconds: Optional[float] = None,
+    prediction_timeout_seconds: Optional[float] = None,
     sample_payload: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     try:
@@ -147,6 +167,8 @@ def try_probe_live_prediction(
             base_url=base_url,
             expected_run_id=expected_run_id,
             timeout_seconds=timeout_seconds,
+            service_timeout_seconds=service_timeout_seconds,
+            prediction_timeout_seconds=prediction_timeout_seconds,
             sample_payload=sample_payload,
         )
     except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError) as exc:

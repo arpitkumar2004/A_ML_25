@@ -189,6 +189,10 @@ jobs:
           python scripts/live_service_smoke_test.py \
             --service-base-url "${{ needs.pre-deployment-checks.outputs.service_base_url }}" \
             --expected-run-id "${{ needs.pre-deployment-checks.outputs.resolved_run_id }}" \
+            --service-timeout-seconds 20 \
+            --prediction-timeout-seconds 180 \
+            --retries 3 \
+            --retry-delay-seconds 20 \
             --output /tmp/live_service_smoke.json
 
       - name: Record verified production state

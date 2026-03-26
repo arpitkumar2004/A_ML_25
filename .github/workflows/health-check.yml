@@ -116,6 +116,10 @@ jobs:
           python scripts/live_service_smoke_test.py \
             --service-base-url "${{ steps.service.outputs.service_base_url }}" \
             --expected-run-id "${{ steps.active.outputs.run_id }}" \
+            --service-timeout-seconds 15 \
+            --prediction-timeout-seconds 120 \
+            --retries 2 \
+            --retry-delay-seconds 15 \
             --output /tmp/live_service_smoke.json
 
       - name: Upload health artifacts
