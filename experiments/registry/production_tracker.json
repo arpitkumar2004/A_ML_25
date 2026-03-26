@@ -1,29 +1,28 @@
 {
   "schema_version": 1,
-  "run_id": "train_20260315T093004Z",
-  "bundle_path": "experiments\\runs\\train_20260315T093004Z\\bundle",
+  "run_id": "train_20260325T155219Z",
+  "bundle_path": "experiments/runs/train_20260325T155219Z/bundle",
   "strategy": "hf_space",
   "status": "active",
-  "last_updated_utc": "2026-03-25T10:39:42.2739555Z",
+  "last_updated_utc": "2026-03-26T16:29:21.367633+00:00",
   "deployment_manifest_path": "experiments/registry/deployment_manifest.json",
   "deployment": {
-    "deployed_at_utc": "2026-03-25T10:39:42.2739555Z",
+    "deployed_at_utc": "2026-03-26T16:29:20.401351+00:00",
     "environment": "production",
-    "deployed_by": "health-check-repair",
-    "deployment_url": "",
-    "service_image": "hf-space:train_20260315T093004Z",
-    "bundle_config_sha256": "bf0b8f86bce8e084c09175e22bae326572ca831fde0781ee04df46b3a2c5e182",
-    "previous_production_run_id": null
+    "deployed_by": "arpitkumar2004",
+    "deployment_url": "https://arpitkumariitkgp-aml25.hf.space",
+    "service_image": "hf-space:train_20260325T155219Z",
+    "bundle_config_sha256": "1077602866eab830558439aa0ba8cbef653e9fde6f8d013c2d60de6830f61bb7",
+    "previous_production_run_id": "train_20260315T093004Z"
   },
   "registry_consistency": {
-    "active_production_run_id": "train_20260315T093004Z",
+    "active_production_run_id": "train_20260325T155219Z",
     "entry_status": "production",
-    "entry_stage": "train",
+    "entry_stage": "promotion",
     "matches_active_production": true
   },
   "metrics": {
-    "latency_p95": 0.0,
-    "error_rate": 0.0,
-    "success_rate": 1.0
+    "latency_p95": 0.007541710202349349,
+    "error_rate": 0.0
   }
 }
