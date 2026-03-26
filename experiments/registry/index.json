@@ -303,7 +303,7 @@
       "run_id": "train_20260315T093004Z",
       "manifest_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\manifest.json",
       "stage": "train",
-      "status": "production",
+      "status": "archived",
       "tracking": {
         "mlflow": {
           "enabled": false,
@@ -314,7 +314,7 @@
       },
       "bundle_path": "experiments\\runs\\train_20260315T093004Z\\bundle",
       "created_utc": "2026-03-15T09:30:20.879759+00:00",
-      "updated_utc": "2026-03-25T10:39:42.2739555Z"
+      "updated_utc": "2026-03-26T16:29:20.862235+00:00"
     },
     {
       "run_id": "train_20260315T123659Z",
@@ -526,7 +526,7 @@
       },
       "bundle_path": "experiments/runs/train_20260325T155219Z/bundle",
       "created_utc": "2026-03-25T15:56:58.075473+00:00",
-      "updated_utc": "2026-03-25T17:08:07.355232+00:00"
+      "updated_utc": "2026-03-26T16:29:20.862250+00:00"
     },
     {
       "run_id": "train_20260325T223816Z",
@@ -543,5 +543,5 @@
       "updated_utc": "2026-03-25T22:43:00.967362+00:00"
     }
   ],
-  "active_production_run_id": "train_20260315T093004Z"
+  "active_production_run_id": "train_20260325T155219Z"
 }

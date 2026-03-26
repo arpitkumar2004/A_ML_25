@@ -1,47 +1,45 @@
 {
   "schema_version": 1,
-  "run_id": "train_20260315T093004Z",
-  "bundle_path": "experiments\\runs\\train_20260315T093004Z\\bundle",
-  "bundle_manifest_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\manifest.json",
-  "bundle_config_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\config.json",
-  "bundle_config_sha256": "bf0b8f86bce8e084c09175e22bae326572ca831fde0781ee04df46b3a2c5e182",
+  "run_id": "train_20260325T155219Z",
+  "bundle_path": "experiments/runs/train_20260325T155219Z/bundle",
+  "bundle_manifest_path": "experiments/runs/train_20260325T155219Z/bundle/manifest.json",
+  "bundle_config_path": "experiments/runs/train_20260325T155219Z/bundle/config.json",
+  "bundle_config_sha256": "1077602866eab830558439aa0ba8cbef653e9fde6f8d013c2d60de6830f61bb7",
   "registry_dir": "experiments/registry",
-  "registry_manifest_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\manifest.json",
+  "registry_manifest_path": "experiments/runs/train_20260325T155219Z/bundle/manifest.json",
   "registry_status": "production",
-  "registry_stage": "train",
+  "registry_stage": "promotion",
   "strategy": "hf_space",
   "environment": "production",
   "status": "active",
-  "deployed_at_utc": "2026-03-25T10:39:42.2739555Z",
-  "deployed_by": "health-check-repair",
-  "deployment_url": "",
+  "deployed_at_utc": "2026-03-26T16:29:20.401351+00:00",
+  "deployed_by": "arpitkumar2004",
+  "deployment_url": "https://arpitkumariitkgp-aml25.hf.space",
   "canary_percent": null,
-  "service_image": "hf-space:train_20260315T093004Z",
-  "previous_production_run_id": null,
+  "service_image": "hf-space:train_20260325T155219Z",
+  "previous_production_run_id": "train_20260315T093004Z",
   "tracking": {
-    "mlflow": {
-      "enabled": false,
-      "mlflow_run_id": null,
-      "tracking_uri": "",
-      "experiment_name": "A_ML_25"
-    }
+    "promoted_by": "arpitkumar2004",
+    "promotion_time": "2026-03-25T17:08:07.354095",
+    "promotion_url": "https://github.com/arpitkumar2004/A_ML_25/actions/runs/23553499223",
+    "target_stage": "production"
   },
   "bundle_validation": {
-    "bundle_path": "experiments\\runs\\train_20260315T093004Z\\bundle",
+    "bundle_path": "experiments/runs/train_20260325T155219Z/bundle",
     "valid": true,
     "problems": [],
     "contract": {
-      "bundle_path": "experiments\\runs\\train_20260315T093004Z\\bundle",
-      "manifest_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\manifest.json",
-      "models_dir": "experiments\\runs\\train_20260315T093004Z\\bundle\\models",
-      "oof_meta_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\oof\\model_names.joblib",
-      "stacker_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\models\\stacker.joblib",
-      "dim_cache": "experiments\\runs\\train_20260315T093004Z\\bundle\\artifacts\\dimred.joblib",
-      "feature_cache": "experiments\\runs\\train_20260315T093004Z\\bundle\\artifacts\\features.joblib",
-      "selector_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\artifacts\\feature_selector.joblib",
-      "numeric_scaler_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\artifacts\\numeric_scaler.joblib",
-      "text_vectorizer_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\artifacts\\tfidf_vectorizer.joblib",
-      "post_log_transform_path": "experiments\\runs\\train_20260315T093004Z\\bundle\\artifacts\\post_feature_log_transform.joblib"
+      "bundle_path": "experiments/runs/train_20260325T155219Z/bundle",
+      "manifest_path": "experiments/runs/train_20260325T155219Z/bundle/manifest.json",
+      "models_dir": "experiments/runs/train_20260325T155219Z/bundle/models",
+      "oof_meta_path": "experiments/runs/train_20260325T155219Z/bundle/oof/model_names.joblib",
+      "stacker_path": "experiments/runs/train_20260325T155219Z/bundle/models/stacker.joblib",
+      "dim_cache": "experiments/runs/train_20260325T155219Z/bundle/artifacts/dimred.joblib",
+      "feature_cache": "experiments/runs/train_20260325T155219Z/bundle/artifacts/features.joblib",
+      "selector_path": "experiments/runs/train_20260325T155219Z/bundle/artifacts/feature_selector.joblib",
+      "numeric_scaler_path": "experiments/runs/train_20260325T155219Z/bundle/artifacts/numeric_scaler.joblib",
+      "text_vectorizer_path": "experiments/runs/train_20260325T155219Z/bundle/artifacts/tfidf_vectorizer.joblib",
+      "post_log_transform_path": "experiments/runs/train_20260325T155219Z/bundle/artifacts/post_feature_log_transform.joblib"
     }
   },
   "bundle_manifest_summary": {
@@ -67,7 +65,5 @@
       "stacker_summary"
     ]
   },
-  "metadata": {
-    "repaired_from": "deployments/hf-space-smoke-fix/metadata/deployment_manifest.json"
-  }
+  "metadata": {}
 }
