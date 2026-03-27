@@ -1,4 +1,4 @@
-# A_ML_25 — Multimodal Price Prediction System
+# A_ML_25 - Multimodal Price Prediction System
 
 Production-oriented ML repository for product price prediction using text, image, and numeric signals.
 
@@ -6,7 +6,9 @@ This project contains:
 
 - an end-to-end offline training pipeline,
 - an inference pipeline and submission generation,
-- a baseline online serving API,
+- a bundle-backed online serving API,
+- a registry, promotion, and deployment state layer,
+- a live Hugging Face Space deployment path,
 - CI quality gates and developer onboarding assets.
 
 ## 1) Project Overview
@@ -31,10 +33,10 @@ src/
     training/                    # CV utilities, trainer, metrics
     inference/                   # Predict and postprocess pipeline
     pipelines/                   # Train/infer/feature/ensemble orchestrators
-    serving/                     # FastAPI serving baseline
+    serving/                     # FastAPI serving and live service validation
 ci_cd/tests/                   # CI test suite
-docs/                          # SLO and handover docs
-experiments/                   # Artifacts: models, oof, logs, reports, submissions
+docs/                          # Handover, setup, and workflow docs
+experiments/                   # Artifacts: bundles, registry state, reports, submissions
 ```
 
 ## 3) Core Architecture
@@ -108,12 +110,14 @@ flowchart LR
 4. Predict + postprocess
 5. Write output CSV
 
-### Online path (serving baseline)
+### Online path (serving)
 
 FastAPI service in `src/serving/app.py`:
 
 - `GET /healthz`
 - `GET /readyz`
+- `GET /service/info`
+- `GET /metrics/json`
 - `POST /v1/warmup`
 - `POST /v1/predict`
 
@@ -218,14 +222,24 @@ curl -X POST "http://127.0.0.1:8000/v1/predict" \
             }'
 ```
 
-## 7) Artifacts and Outputs
+## 7) Artifacts, Registry, and Deployment State
 
 Typical generated artifacts:
 
-- `experiments/models/` (fold models, stacker)
+- `experiments/runs/<run_id>/bundle/` (immutable run-scoped model bundle)
+- `experiments/registry/index.json` (registry state and active production pointer)
+- `experiments/registry/deployment_manifest.json` (verified deployment record)
+- `experiments/registry/production_tracker.json` (active production metadata and metrics)
 - `experiments/oof/` (OOF matrix, model names)
 - `experiments/reports/` (comparison and stacker summaries)
 - `experiments/submissions/` (prediction files)
+
+Current checked-in production state points to:
+
+- active production run: `train_20260325T155219Z`
+- strategy: `hf_space`
+- status: `active`
+- deployment URL: `https://arpitkumariitkgp-aml25.hf.space`
 
 ## 8) CI and Quality Gates
 
@@ -249,8 +263,9 @@ The CLI automatically supports nested config sections (for example, `training:` 
 
 ## 10) Operational Notes
 
-- Designed as a modular ML codebase with production hardening underway.
-- Current serving stack is FastAPI baseline; low-latency production design should evolve with Redis-backed online feature lookup, Kafka event-driven updates, Docker/Kubernetes orchestration, and stronger monitoring/rollback automation.
+- Designed as a modular ML codebase with a real production-like release path.
+- Current serving stack is FastAPI with bundle-backed loading, registry-aware deployment state, and a Hugging Face Space deployment target.
+- The most credible current portfolio story is: train a run-scoped bundle, promote the run, deploy it to Hugging Face Space, verify live endpoints, then persist production state.
 
 ### Target improvement roadmap (future plan)
 
@@ -272,7 +287,8 @@ Current vs target trend:
 See:
 
 - `docs/DEVELOPER_ONBOARDING_AND_TECHNICAL_HANDOVER.md`
-- `docs/slo_latency_tiers.md`
+- `docs/GITHUB_SECRETS_SETUP.md`
+- `docs/KAGGLE_COLAB_DVC_MLFLOW_GITHUB_RUNBOOK.md`
 
 Detailed execution roadmap: `docs/DEVELOPER_ONBOARDING_AND_TECHNICAL_HANDOVER.md` section "10) Target Future Development Plan (Gap Closure Roadmap)".
 
@@ -392,192 +408,158 @@ If you keep DagsHub credentials in `.env`, use the helper script so DVC commands
 - CI runs `python scripts/check_repo_hygiene.py` to fail PRs if binary payloads are committed directly to Git.
 - If `dvc push` fails due credentials, data pointers may be in Git but remote data will not be available to collaborators until push succeeds.
 
-## 15) Phase 3: CI/CD Automation Upgrade (Implemented)
+## 15) CI/CD Automation
 
-Production-grade automated ML deployment pipeline with training, promotion, and health monitoring.
+Production-oriented ML delivery pipeline with training, promotion, verified deployment, and health monitoring.
 
 ### Overview
 
-Phase 3 automates the full model lifecycle:
+Phase 3 automates the current portfolio deployment lifecycle:
 
-```
-Data Push → CI Gate → Drift Check → Training → Model Promotion → Deployment (Canary) → Health Check → Production
+```text
+Git Push -> CI Gate -> Drift Check -> Training -> Promotion Approval -> HF Space Deploy -> Live Validation -> Production State Update
 ```
 
 ### Key Components
 
 #### 1. Training Pipeline (`.github/workflows/training.yml`)
-- **Trigger**: Daily 22:00 UTC or manual via `workflow_dispatch`
-- **Stages**:
-  1. Drift detection (compare current data to baseline)
-  2. Training (runs if drift detected or force_retrain=true)
-  3. Validation (accuracy, SMAPE, latency checks)
-  4. Registration (adds model to registry in "staging" stage)
-  5. Smoke test (verify inference works)
-- **Timeout**: 120 minutes
-- **Output**: MLflow run ID, metrics, artifacts
+- Trigger: daily at `22:00 UTC` or manual `workflow_dispatch`
+- Flow:
+  1. check data drift
+  2. pull data through DVC
+  3. prepare training data
+  4. train and validate a canonical bundle-backed run
+  5. register the run in `experiments/registry/`
+  6. persist workflow outputs and smoke-test artifacts
+- Main output: canonical local `run_id`, immutable bundle, registry entry, metrics artifacts
 
-#### 2. Model Promotion (`.github/workflows/promote.yml`)
-- **Stages**: staging → canary → production
-- **Pre-promotion checks**: Validation thresholds (accuracy ≥0.70, latency ≤2s, error rate ≤2%)
-- **Environment approval**: GitHub environment protection for production promotions
-- **Registry state machine**: Tracks status, promotion history, rollback capability
-- **Git tagging**: Creates tags for all promotions
+#### 2. Promotion Workflow (`.github/workflows/promote.yml`)
+- Supported stages: `staging` and `production`
+- Flow:
+  1. resolve canonical run ID
+  2. restore durable bundle
+  3. validate promotion thresholds
+  4. require environment approval for production
+  5. update registry state and tag approved releases
+- Important distinction: promotion means approved for deployment, not yet live
 
-#### 3. Deployment Strategies (`.github/workflows/deploy.yml`)
-- **Canary**: Route 10% traffic for 60 seconds, auto-promote if healthy, auto-rollback if degraded
-- **Blue-Green**: Deploy to green env, test fully, switch all traffic, keep blue for instant rollback
-- **Rolling**: Gradual rollout (25%→50%→75%→100%) with monitoring between stages
+#### 3. Deployment Workflow (`.github/workflows/deploy.yml`)
+- Deployment target: Hugging Face Space
+- Flow:
+  1. resolve canonical run ID
+  2. restore immutable bundle
+  3. run pre-deployment checks
+  4. run bundle-backed inference smoke test
+  5. create HF Space package
+  6. publish to Hugging Face Space
+  7. wait for `/readyz` and `/service/info` to report the expected run
+  8. run live prediction smoke test
+  9. write `deployment_manifest.json`
+  10. activate the production run in the registry
+  11. write `production_tracker.json`
+  12. persist verified deployment state back to Git
 
-#### 4. Health Checks (`.github/workflows/health-check.yml`)
-- **Frequency**: Every 6 hours + post-deployment
-- **Checks**:
-  - MLflow connectivity
-  - Production model loadability
-  - Inference latency and error rates
-  - Data/concept drift detection
-  - System resource usage
-- **Escalation**: Creates issues if degraded, triggers auto-rollback if critical
+#### 4. Health Check Workflow (`.github/workflows/health-check.yml`)
+- Frequency: every 6 hours or manual trigger
+- Checks:
+  - MLflow connectivity when configured
+  - production model loadability
+  - registry consistency
+  - inference health
+  - live production validation when service URL is available
+- Uses the active production run and can derive the HF Space URL from workflow variables
+
+#### 5. Daily Monitoring Workflow (`.github/workflows/daily-monitoring.yml`)
+- Builds monitoring artifacts and checks alert conditions on a schedule
 
 ### Configuration
 
-#### GitHub Secrets (Required)
-Set these in **Settings → Secrets and variables → Actions**:
-```
+#### GitHub Secrets and Variables
+Set these in `Settings -> Secrets and variables -> Actions`:
+
+```text
 MLFLOW_TRACKING_URI
 MLFLOW_TRACKING_USERNAME
 MLFLOW_TRACKING_PASSWORD
-DAGSHUB_USERNAME (optional, for DVC)
-DAGSHUB_TOKEN (optional, for DVC)
+DAGSHUB_USERNAME
+DAGSHUB_TOKEN
 AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
+HF_SPACE_TOKEN
+PRODUCTION_SERVICE_BASE_URL   # optional
+HF_SPACE_REPO_ID              # variable, optional if using the default repo id
 ```
 
-See: `docs/GITHUB_SECRETS_SETUP.md` for detailed setup
-
-#### Branch Protection (Required)
-Enable on `main` branch:
-- ✓ 1 PR review required
-- ✓ Dismiss stale reviews
-- ✓ Require CI checks pass
-- ✓ Require branches up-to-date
-- ✓ Require conversation resolution
+See `docs/GITHUB_SECRETS_SETUP.md` for setup guidance.
 
 #### Model Registry
 Located at `experiments/registry/`:
-```
-index.json              # Model state machine
-promotion_history.jsonl # Promotion audit log
-rollback_history.jsonl  # Rollback audit log
+
+```text
+index.json                 # run registry and active production pointer
+promotion_history.jsonl    # promotion audit log
+deployment_manifest.json   # verified deployment record
+production_tracker.json    # active production metadata + metrics
 ```
 
 ### Quick Start
 
-#### 1. Configure Secrets
+#### 1. Trigger Training
 ```bash
-gh secret set MLFLOW_TRACKING_URI -b "https://dagshub.com/user/repo.mlflow"
-gh secret set MLFLOW_TRACKING_USERNAME -b "username"
-gh secret set MLFLOW_TRACKING_PASSWORD -b "token"
-# ... (set remaining 4 secrets)
+gh workflow run training.yml -f force_retrain=true -f model_config=configs/training/final_train.yaml
 ```
 
-#### 2. Trigger Training
-```bash
-# Manual trigger
-gh workflow run training.yml -f force_retrain=true
+#### 2. Promote a Run
+Open `Actions -> Model Promotion -> Run workflow`:
+- enter the canonical `run_id`
+- choose `staging` or `production`
+- review promotion validation artifacts in the workflow logs
 
-# Or wait for daily schedule (22:00 UTC)
-```
+#### 3. Deploy to Hugging Face Space
+Open `Actions -> Deploy Live Service -> Run workflow`:
+- enter the approved `run_id`
+- enter `space_repo_id` such as `arpitkumariitkgp/aml25`
+- set `create_if_missing=true` only when bootstrapping a new Space
 
-#### 3. Promote Model
-Open Actions → Model Promotion → Run workflow:
-- Enter: `run_id` from training output
-- Select: `target_stage` (e.g., "canary")
-- Review validation checks in logs
-
-#### 4. Deploy
-Open Actions → Deployment → Run workflow:
-- Enter: `run_id` (must be in production stage)
-- Select: `deployment_strategy` (e.g., "canary")
-- Monitor canary metrics in logs
-
-#### 5. Monitor Health
-Health checks run automatically every 6 hours. View results in Actions → Health Check.
+#### 4. Monitor Health
+Health checks run automatically every 6 hours. Use `health-check.yml` for manual checks and `daily-monitoring.yml` for scheduled monitoring artifacts.
 
 ### Workflow Diagram
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│ GitHub Push (main branch) → CI Gate                            │
-│   Syntax ✓ | Tests ✓ | Hygiene ✓ | Smoke ✓                   │
-└────────────────────────────────────────────────────────────────┘
-                           ↓
-┌────────────────────────────────────────────────────────────────┐
-│ Daily Schedule (22:00 UTC) → Training Pipeline                 │
-│   Drift Check → Train → Validate → Register → Smoke Test       │
-│   Output: MLflow run_id, model in "staging" stage             │
-└────────────────────────────────────────────────────────────────┘
-                           ↓
-┌────────────────────────────────────────────────────────────────┐
-│ Manual: Promotion Workflow                                      │
-│   Validate → Approve (if production) → Registry Update → Tag   │
-│   Output: model moved to "canary" or "production"              │
-└────────────────────────────────────────────────────────────────┘
-                           ↓
-┌────────────────────────────────────────────────────────────────┐
-│ Manual: Deployment Workflow                                     │
-│   Pre-Deploy Checks → Canary/Blue-Green → Monitor → Promote    │
-│   Output: config files updated, ready for serving              │
-└────────────────────────────────────────────────────────────────┘
-                           ↓
-┌────────────────────────────────────────────────────────────────┐
-│ Every 6 Hours: Health Check Pipeline                           │
-│   MLflow ✓ | Model ✓ | Inference ✓ | Drift ✓ | Resources ✓    │
-│   Output: Pass/Fail → Create issue → Auto-rollback if critical │
-└────────────────────────────────────────────────────────────────┘
+```text
+Push/PR -> ci.yml
+Schedule/manual -> training.yml -> staging registry entry
+Manual approval -> promote.yml -> production-approved run
+Manual deploy -> deploy.yml -> HF Space publish -> live verification -> deployment manifest + production tracker update
+Scheduled/manual -> health-check.yml -> production validation
+Scheduled -> daily-monitoring.yml -> monitoring artifacts and alerts
 ```
 
 ### Rollback Procedures
 
-**Automatic** (triggered by health check failure):
-```python
-if health_status == "critical":
-    rollback_to_previous_production()
-    alert(severity="critical")
-```
+Manual rollback:
 
-**Manual**:
 ```bash
-# Via Actions UI
-# 1. Go to Actions → Promote
-# 2. Run with previous run_id and target_stage="production"
-
-# Or via CLI
 python scripts/rollback_deployment.py \
   --to-previous-production \
   --reason "Manual: detected latency spike"
 ```
 
-### Cost Optimization
+Operationally, rollback uses the previous production run recorded in the deployment state and updates registry-tracked production metadata.
 
-- **Training**: 1x daily, 2 hrs max → ~$2-5/day (on GPU runners)
-- **CI/CD**: Parallel jobs, shared cache → ~$50-100/month
-- **Storage**: Retention policies (30-day artifact, 7-day logs) → ~$20-50/month
-- **Total**: ~$300-700/month for typical scale
-
-### Observability & Alerts
+### Observability and Alerting
 
 Key metrics to monitor:
-- Model accuracy trend
-- Prediction latency (p50, p95, p99)
-- Error rate / exception rate
-- Data drift magnitude
-- Training frequency / model freshness
-- Deployment success rate
+- SMAPE or quality trend from training and promotion checks
+- prediction latency (`p50`, `p95`, `p99`)
+- error rate / exception rate
+- data drift magnitude
+- model freshness
+- deployment success rate
 
-Alert thresholds:
-```
-WARN if accuracy < 0.70    | CRITICAL if < 0.65
+Representative alert thresholds:
+
+```text
 WARN if latency_p95 > 2.0s | CRITICAL if > 5.0s
 WARN if error_rate > 0.02  | CRITICAL if > 0.05
 WARN if drift > 0.10       | CRITICAL if > 0.25
@@ -585,18 +567,18 @@ WARN if drift > 0.10       | CRITICAL if > 0.25
 
 ### Documentation
 
-- **Detailed guide**: `docs/PHASE_3_CI_CD_AUTOMATION.md`
-- **Secrets setup**: `docs/GITHUB_SECRETS_SETUP.md`
-- **Production runbook**: `docs/PRODUCTION_RUNBOOK.md`
+- `docs/DEVELOPER_ONBOARDING_AND_TECHNICAL_HANDOVER.md`
+- `docs/GITHUB_SECRETS_SETUP.md`
+- `docs/KAGGLE_COLAB_DVC_MLFLOW_GITHUB_RUNBOOK.md`
 
 ### Common Tasks
 
-#### Force Retrain (Bypass Drift Check)
+#### Force Retrain
 ```bash
 gh workflow run training.yml -f force_retrain=true -f model_config=configs/training/final_train.yaml
 ```
 
-#### Check Model Registry
+#### Check Registry State
 ```bash
 cat experiments/registry/index.json | jq '.'
 ```
