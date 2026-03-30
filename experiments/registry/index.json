@@ -597,6 +597,20 @@
       "bundle_path": "experiments/runs/train_20260329T223333Z/bundle",
       "created_utc": "2026-03-29T22:36:54.425629+00:00",
       "updated_utc": "2026-03-29T22:37:04.944113+00:00"
+    },
+    {
+      "run_id": "train_20260330T223740Z",
+      "manifest_path": "experiments/runs/train_20260330T223740Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-03-30T22:41:45.049518"
+      },
+      "bundle_path": "experiments/runs/train_20260330T223740Z/bundle",
+      "created_utc": "2026-03-30T22:41:34.671855+00:00",
+      "updated_utc": "2026-03-30T22:41:45.049708+00:00"
     }
   ],
   "active_production_run_id": "train_20260325T155219Z"
