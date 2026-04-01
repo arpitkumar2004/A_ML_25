@@ -69,13 +69,33 @@ def _load_frontend_html() -> str:
     if frontend_path.exists():
         return frontend_path.read_text(encoding="utf-8")
 
-    logger.warning("frontend_index_missing path=%s", frontend_path)
-    return """<!doctype html>
+        logger.warning("frontend_index_missing path=%s", frontend_path)
+        return """<!doctype html>
 <html lang="en">
-<head><meta charset="utf-8" /><title>A_ML_25 UI Missing</title></head>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A_ML_25: Multimodal Pricing Engine</title>
+    <link rel="stylesheet" href="/frontend/dashboard.css" />
+</head>
 <body style="font-family: Arial, sans-serif; padding: 24px;">
-<h1>Frontend file missing</h1>
-<p>The app expected <code>frontend/index.html</code> next to the project root.</p>
+    <h1>A_ML_25: Multimodal Pricing Engine</h1>
+    <p>Frontend file missing. Serving a minimal fallback interface.</p>
+    <button id="runBtn" type="button">Execute Serving Pipeline</button>
+
+    <section>
+        <h2>Execution Trace</h2>
+        <pre>frontend/index.html not found at startup</pre>
+    </section>
+
+    <section>
+        <h2>Ensemble Breakdown</h2>
+        <p>Model contribution details are unavailable in fallback mode.</p>
+    </section>
+
+    <a href="#lineage">View Training Lineage</a>
+
+    <script src="/frontend/dashboard.js"></script>
 </body>
 </html>"""
 
