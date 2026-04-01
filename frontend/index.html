@@ -6,10 +6,10 @@
   <title>A_ML_25 | Multimodal Pricing Engine</title>
   <link rel="stylesheet" href="/frontend/dashboard.css" />
 </head>
-<body>
+<body class="viewer-mode">
   <header class="topbar">
     <div class="topbar-title">
-      <!-- <div class="topbar-kicker">MLOps System Console</div> -->
+      <div class="topbar-kicker">Multimodal Intelligence</div>
       <h1>A_ML_25: Multimodal Pricing Engine</h1>
     </div>
     <div class="topbar-badges">
@@ -23,20 +23,60 @@
     </div>
   </header>
 
+  <section class="story-hero">
+    <div class="story-copy">
+      <div class="eyebrow">Project Story</div>
+      <h2>Price Prediction from Product Text + Image, Built for Trust</h2>
+      <p>Use a single product sample to run the full serving path, then inspect reliability signals, fallback behavior, and deployment lineage.</p>
+      <div class="story-actions">
+        <button class="btn btn-primary" id="tryDemoBtn" type="button">Try Demo Prediction</button>
+        <button class="btn btn-secondary" id="openArchBtn" type="button">See Architecture</button>
+      </div>
+    </div>
+    <aside class="story-trust" aria-label="Trust signals">
+      <div class="trust-card"><span>System Health</span><strong id="heroHealth">Checking</strong></div>
+      <div class="trust-card"><span>Model Lineage</span><strong id="heroRun">unknown</strong></div>
+      <div class="trust-card"><span>Live p95 Latency</span><strong id="heroLatency">0 ms</strong></div>
+      <div class="trust-card"><span>Fallback Safety</span><strong id="heroFallback">Awaiting run</strong></div>
+    </aside>
+  </section>
+
+  <section class="mode-switch" aria-label="Interface mode selector">
+    <div class="mode-copy">
+      <div class="eyebrow">Interaction Mode</div>
+      <h3>Simple by default, deep when needed</h3>
+      <p>Viewer mode keeps the demo focused. Engineer mode reveals schema, diagnostics, payload inspection, and controls for deeper validation.</p>
+    </div>
+    <div class="mode-buttons" role="tablist" aria-label="Mode tabs">
+      <button class="mode-btn is-active" id="viewerModeBtn" type="button" role="tab" aria-selected="true">Viewer Mode</button>
+      <button class="mode-btn" id="engineerModeBtn" type="button" role="tab" aria-selected="false">Engineer Mode</button>
+    </div>
+  </section>
+
   <main class="app-shell">
     <aside class="left-pane pane">
       <div class="section-head">
-        <div class="eyebrow">Input Controls</div>
-        <h2>Execute Serving Pipeline</h2>
-        <p>Keep the interaction simple. Feed the multimodal payload on the left and inspect the full system behavior on the right.</p>
+        <div class="eyebrow">Guided Input</div>
+        <h2>Run a Prediction in 3 Steps</h2>
+        <p>Choose sample context, provide image input, then execute prediction. Advanced controls are available in Engineer mode.</p>
       </div>
 
       <div class="input-stack">
+        <div class="step-card">
+          <div class="step-index">Step 1</div>
+          <h3>Describe the product</h3>
+          <p>Paste title, bullets, and pack details so the text encoder and parser have enough context.</p>
+        </div>
         <div class="field">
           <label for="catalogContent">Catalog Description</label>
           <textarea id="catalogContent" class="catalog-box"></textarea>
         </div>
 
+        <div class="step-card">
+          <div class="step-index">Step 2</div>
+          <h3>Add visual context</h3>
+          <p>Provide an image URL to include visual features in the final ensemble output.</p>
+        </div>
         <div class="field">
           <label for="imageUrl">Image URL</label>
           <input id="imageUrl" type="text" placeholder="https://..." />
@@ -50,7 +90,13 @@
           </div>
         </div>
 
-        <div class="triple-grid">
+        <div class="step-card">
+          <div class="step-index">Step 3</div>
+          <h3>Execute prediction</h3>
+          <p>Run the serving pipeline and review the final output with reliability diagnostics.</p>
+        </div>
+
+        <div class="triple-grid engineer-only">
           <div class="field">
             <label for="sampleId">Sample ID</label>
             <input id="sampleId" type="number" value="1001" />
@@ -76,17 +122,17 @@
           </div>
         </div>
 
-        <label class="toggle-row" for="simulateBroken">
+        <label class="toggle-row engineer-only" for="simulateBroken">
           <input id="simulateBroken" type="checkbox" />
           <span>Simulate Broken Image URL (Test Fallback)</span>
         </label>
 
         <div class="action-stack">
-          <button class="btn btn-primary" id="runBtn" type="button">Execute Serving Pipeline</button>
+          <button class="btn btn-primary" id="runBtn" type="button">Run Prediction</button>
           <button class="btn btn-secondary" id="sampleBtn" type="button">Load Smoke Test Sample</button>
         </div>
 
-        <details class="payload-panel">
+        <details class="payload-panel engineer-only">
           <summary>Inspect Request Payload</summary>
           <pre id="payloadPreview" class="code-box"></pre>
         </details>
@@ -96,9 +142,9 @@
     <section class="right-pane pane">
       <div class="hero-panel">
         <div class="hero-copy">
-          <div class="eyebrow">Live Execution</div>
-          <h2>Serving Command Center</h2>
-          <p id="predictionMeta">Ready for execution. The console will stream pipeline steps here.</p>
+          <div class="eyebrow">Live Prediction</div>
+          <h2>Result-First Experience</h2>
+          <p id="predictionMeta" aria-live="polite">Ready for execution. Run a prediction to see output, feature behavior, and reliability insights.</p>
           <div class="insight-strip">
             <div class="mini-stat"><span>Schema</span><strong id="schemaSummary">aligned on demand</strong></div>
             <div class="mini-stat"><span>Feature Width</span><strong id="featureWidthView">--</strong></div>
@@ -108,29 +154,53 @@
         </div>
         <div class="hero-metric">
           <div class="hero-label">Predicted Price</div>
-          <div class="hero-price" id="predictedPrice">$--</div>
+          <div class="hero-price" id="predictedPrice" aria-live="polite">$--</div>
           <div class="hero-subgrid">
             <div class="mini-stat"><span>Reference</span><strong id="referenceView">--</strong></div>
             <div class="mini-stat"><span>Delta</span><strong id="deltaView">--</strong></div>
             <div class="mini-stat"><span>Variant</span><strong id="variantView">--</strong></div>
             <div class="mini-stat"><span>Canary MAE</span><strong id="canaryView">--</strong></div>
           </div>
+          <div class="confidence-card">
+            <div class="meter-label">Confidence Band</div>
+            <strong id="confidenceBand">--</strong>
+            <div class="meter"><span id="confidenceBar"></span></div>
+            <p id="confidenceNote">Run a prediction to estimate uncertainty and reliability.</p>
+          </div>
         </div>
       </div>
 
+      <section class="driver-panel" aria-label="Key prediction drivers">
+        <div class="driver-card">
+          <span>Text Signal</span>
+          <strong id="textDriver">--</strong>
+          <p id="textDriverNote">Waiting for prediction.</p>
+        </div>
+        <div class="driver-card">
+          <span>Image Signal</span>
+          <strong id="imageDriver">--</strong>
+          <p id="imageDriverNote">Waiting for prediction.</p>
+        </div>
+        <div class="driver-card">
+          <span>Numeric Signal</span>
+          <strong id="numericDriver">--</strong>
+          <p id="numericDriverNote">Waiting for prediction.</p>
+        </div>
+      </section>
+
       <section class="terminal-panel is-hidden" id="terminalPanel">
         <div class="terminal-head">
-          <div class="terminal-title">Execution Trace</div>
+          <div class="terminal-title">Pipeline Timeline</div>
           <div class="terminal-meta" id="terminalStatus">Awaiting pipeline run</div>
         </div>
         <div class="terminal-body" id="terminalBody"></div>
       </section>
 
-      <section class="details-panel">
+      <section class="details-panel engineer-only">
         <div class="tabs" role="tablist" aria-label="Explainability tabs">
-          <button class="tab is-active" data-tab="schema" type="button">Schema &amp; Trace</button>
+          <button class="tab is-active" data-tab="schema" type="button">How Input Was Processed</button>
           <button class="tab" data-tab="ensemble" type="button">Ensemble Breakdown</button>
-          <button class="tab" data-tab="parsed" type="button">Parsed Features</button>
+          <button class="tab" data-tab="parsed" type="button">Extracted Attributes</button>
           <button class="tab" data-tab="system" type="button">System Telemetry</button>
         </div>
 
@@ -174,12 +244,21 @@
         </div>
       </section>
 
-      <footer class="footer-panel">
-        <div class="footer-links">
-          <a class="footer-link" id="bundleLink" target="_blank" rel="noreferrer">View Immutable Bundle</a>
-          <a class="footer-link" id="mlflowLink" target="_blank" rel="noreferrer">View Training Lineage</a>
-          <a class="footer-link" id="manifestLink" target="_blank" rel="noreferrer">View Deployment Manifest</a>
+      <section class="reliability-panel" aria-label="Reliability and monitoring">
+        <div class="eyebrow">Reliability and Monitoring</div>
+        <h3>Live service quality snapshot</h3>
+        <div class="reliability-grid">
+          <div class="system-card"><span>System State</span><strong id="reliabilityHealth">Checking</strong></div>
+          <div class="system-card"><span>Fallback Status</span><strong id="reliabilityFallback">Awaiting run</strong></div>
+          <div class="system-card"><span>Error Rate</span><strong id="reliabilityError">0.00%</strong></div>
+          <div class="system-card"><span>Data Quality Pass Rate</span><strong id="reliabilityDQ">0.00%</strong></div>
         </div>
+      </section>
+
+      <section class="architecture-panel" id="architecturePanel">
+        <div class="eyebrow">How It Works</div>
+        <h3>End-to-end MLOps Lineage</h3>
+        <p>Prediction calls are traceable from feature extraction and ensemble scoring to immutable bundle lineage and deployment metadata.</p>
         <div class="lineage-map">
           <div>GitHub push</div>
           <div>GitHub Actions</div>
@@ -189,9 +268,19 @@
           <div>Docker build</div>
           <div>HF Spaces deploy</div>
         </div>
+      </section>
+
+      <footer class="footer-panel">
+        <div class="footer-links">
+          <a class="footer-link" id="bundleLink" target="_blank" rel="noreferrer">View Immutable Bundle</a>
+          <a class="footer-link" id="mlflowLink" target="_blank" rel="noreferrer">View Training Lineage</a>
+          <a class="footer-link" id="manifestLink" target="_blank" rel="noreferrer">View Deployment Manifest</a>
+        </div>
       </footer>
     </section>
   </main>
+
+  <button class="mobile-run" id="mobileRunBtn" type="button">Run Prediction</button>
 
   <script src="/frontend/dashboard.js"></script>
 </body>

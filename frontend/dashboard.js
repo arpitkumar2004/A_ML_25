@@ -23,10 +23,114 @@ const money = (value) => value === null || value === undefined || Number.isNaN(N
   : Number(value).toLocaleString(undefined, { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 3 });
 const percent = (value) => `${(Number(value || 0) * 100).toFixed(2)}%`;
 const widthPercent = (value) => `${Math.max(0, Math.min(100, Number(value || 0) * 100)).toFixed(1)}%`;
+const clamp01 = (value) => Math.max(0, Math.min(1, Number(value || 0)));
 
 let telemetrySnapshot = null;
 let activeTerminalRun = 0;
 let serviceSnapshot = null;
+let currentMode = "viewer";
+let currentPriceValue = null;
+
+function animatePredictionPrice(targetValue) {
+  if (targetValue === null || targetValue === undefined || Number.isNaN(Number(targetValue))) {
+    currentPriceValue = null;
+    node("predictedPrice").textContent = "$--";
+    return;
+  }
+
+  const to = Number(targetValue);
+  const from = currentPriceValue === null ? Math.max(0, to * 0.85) : currentPriceValue;
+  const durationMs = 540;
+  const startTs = performance.now();
+
+  function step(now) {
+    const t = Math.min(1, (now - startTs) / durationMs);
+    const eased = 1 - Math.pow(1 - t, 3);
+    const value = from + (to - from) * eased;
+    node("predictedPrice").textContent = money(value);
+    if (t < 1) {
+      window.requestAnimationFrame(step);
+    } else {
+      currentPriceValue = to;
+      node("predictedPrice").textContent = money(to);
+    }
+  }
+
+  window.requestAnimationFrame(step);
+}
+
+function renderConfidence(prediction, canaryMae, imageFallbackActive) {
+  if (prediction === null || prediction === undefined || Number.isNaN(Number(prediction))) {
+    node("confidenceBand").textContent = "--";
+    node("confidenceBar").style.width = "0%";
+    node("confidenceNote").textContent = "Run a prediction to estimate uncertainty and reliability.";
+    return;
+  }
+
+  const mae = canaryMae === null || canaryMae === undefined || Number.isNaN(Number(canaryMae)) ? 0.035 : Number(canaryMae);
+  let confidence = 0.9 - Math.min(0.42, mae * 2.8);
+  if (imageFallbackActive) confidence -= 0.12;
+  confidence = clamp01(confidence);
+
+  const spread = Math.max(0.05, (1 - confidence) * 0.22);
+  const center = Number(prediction);
+  const low = Math.max(0, center * (1 - spread));
+  const high = center * (1 + spread);
+
+  node("confidenceBand").textContent = `${money(low)} to ${money(high)}`;
+  node("confidenceBar").style.width = `${(confidence * 100).toFixed(1)}%`;
+  node("confidenceNote").textContent = imageFallbackActive
+    ? "Image fallback was used, so uncertainty is wider for this run."
+    : confidence >= 0.75
+      ? "High-confidence prediction based on aligned multimodal signals."
+      : "Moderate confidence. Use reference delta and diagnostics for review.";
+}
+
+function renderDrivers(trace) {
+  const fx = trace.feature_extraction || {};
+  const textDims = Number(fx.text && fx.text.dimensions || 0);
+  const imageDims = Number(fx.image && fx.image.dimensions || 0);
+  const numericDims = Number(fx.numeric && fx.numeric.dimensions || 0);
+  const total = Math.max(1, textDims + imageDims + numericDims);
+  const imageFallbackActive = Number(fx.image && fx.image.zero_rows || 0) > 0;
+
+  const textShare = textDims / total;
+  const imageShare = imageDims / total;
+  const numericShare = numericDims / total;
+
+  node("textDriver").textContent = percent(textShare);
+  node("imageDriver").textContent = percent(imageShare);
+  node("numericDriver").textContent = percent(numericShare);
+
+  node("textDriverNote").textContent = textDims > 0 ? `${textDims} text embedding dimensions active.` : "No text dimensions detected.";
+  node("imageDriverNote").textContent = imageFallbackActive
+    ? "Image fallback active for this run."
+    : imageDims > 0
+      ? `${imageDims} image embedding dimensions active.`
+      : "No image dimensions detected.";
+  node("numericDriverNote").textContent = numericDims > 0 ? `${numericDims} numeric features active.` : "No numeric features detected.";
+}
+
+function resetRunInsights() {
+  node("confidenceBand").textContent = "--";
+  node("confidenceBar").style.width = "0%";
+  node("confidenceNote").textContent = "Run a prediction to estimate uncertainty and reliability.";
+  node("textDriver").textContent = "--";
+  node("imageDriver").textContent = "--";
+  node("numericDriver").textContent = "--";
+  node("textDriverNote").textContent = "Waiting for prediction.";
+  node("imageDriverNote").textContent = "Waiting for prediction.";
+  node("numericDriverNote").textContent = "Waiting for prediction.";
+}
+
+function setMode(mode) {
+  currentMode = mode === "engineer" ? "engineer" : "viewer";
+  document.body.classList.toggle("viewer-mode", currentMode === "viewer");
+  node("viewerModeBtn").classList.toggle("is-active", currentMode === "viewer");
+  node("engineerModeBtn").classList.toggle("is-active", currentMode === "engineer");
+  node("viewerModeBtn").setAttribute("aria-selected", String(currentMode === "viewer"));
+  node("engineerModeBtn").setAttribute("aria-selected", String(currentMode === "engineer"));
+}
 
 function readForm() {
   const brokenToggle = node("simulateBroken").checked;
@@ -121,6 +225,9 @@ function renderServiceInfo(service) {
   setStatus(Boolean(service.ready), service.ready ? "Healthy" : "Degraded");
   node("activeRunId").textContent = service.run_id || "unknown";
   node("environmentTag").textContent = service.environment || "PRODUCTION";
+  node("heroRun").textContent = service.run_id || "unknown";
+  node("heroHealth").textContent = service.ready ? "Healthy" : "Degraded";
+  node("reliabilityHealth").textContent = service.ready ? "Healthy" : "Degraded";
   node("serviceSnapshotBox").textContent = JSON.stringify(service, null, 2);
 
   const links = service.links || {};
@@ -133,12 +240,18 @@ function renderTelemetry(metrics) {
   telemetrySnapshot = metrics;
   const fallback = metrics.fallback || {};
   const dataQuality = metrics.data_quality || {};
+  const fallbackRate = Math.max(Number(fallback.image_rate || 0), Number(fallback.text_rate || 0));
 
   node("p95Latency").textContent = `${Math.round(Number(metrics.latency_ms && metrics.latency_ms.p95 || 0))} ms`;
+  node("heroLatency").textContent = node("p95Latency").textContent;
   node("requestsCount").textContent = Number(metrics.request_count || 0).toLocaleString();
   node("errorRate").textContent = percent(metrics.error_rate || 0);
-  node("fallbackRate").textContent = percent(Math.max(Number(fallback.image_rate || 0), Number(fallback.text_rate || 0)));
+  node("fallbackRate").textContent = percent(fallbackRate);
   node("dqPassRate").textContent = percent(dataQuality.pass_rate || 0);
+  node("heroFallback").textContent = fallbackRate > 0 ? "Fallback observed" : "No fallback observed";
+  node("reliabilityFallback").textContent = fallbackRate > 0 ? "Observed" : "None observed";
+  node("reliabilityError").textContent = node("errorRate").textContent;
+  node("reliabilityDQ").textContent = node("dqPassRate").textContent;
 
   node("imageFallbackBar").style.width = widthPercent(fallback.image_rate || 0);
   node("textFallbackBar").style.width = widthPercent(fallback.text_rate || 0);
@@ -258,7 +371,10 @@ function renderTabs(trace) {
   node("featureWidthView").textContent = featureWidth || "--";
   node("modelCountView").textContent = `${ensemble.base_model_count || 0} models`;
   node("fallbackStateView").textContent = Number(fx.image && fx.image.zero_rows || 0) > 0 ? "image fallback active" : "no image fallback";
+  node("heroFallback").textContent = Number(fx.image && fx.image.zero_rows || 0) > 0 ? "Fallback active" : "No fallback in run";
+  node("reliabilityFallback").textContent = Number(fx.image && fx.image.zero_rows || 0) > 0 ? "Image fallback active" : "No fallback in run";
   node("rawTraceBox").textContent = JSON.stringify(trace, null, 2);
+  renderDrivers(trace);
 }
 
 function selectTab(name) {
@@ -275,7 +391,7 @@ async function runInference() {
   activeTerminalRun = runId;
   startTerminal(runId);
   node("predictionMeta").textContent = "Serving pipeline executing. Terminal trace is live.";
-  node("predictedPrice").textContent = "$--";
+  animatePredictionPrice(null);
   node("variantView").textContent = "--";
   node("canaryView").textContent = "--";
   node("deltaView").textContent = "--";
@@ -283,7 +399,10 @@ async function runInference() {
   node("featureWidthView").textContent = "--";
   node("modelCountView").textContent = "--";
   node("fallbackStateView").textContent = "pending";
+  node("heroFallback").textContent = "Processing";
+  node("reliabilityFallback").textContent = "Processing";
   node("rawTraceBox").textContent = "Diagnostics will appear after the model responds.";
+  resetRunInsights();
   if (serviceSnapshot) {
     node("serviceSnapshotBox").textContent = JSON.stringify(serviceSnapshot, null, 2);
   }
@@ -320,11 +439,12 @@ async function runInference() {
     const reference = readForm().reference_price === "" ? null : Number(readForm().reference_price);
     const delta = prediction === null || reference === null || Number.isNaN(reference) ? null : Number(prediction) - reference;
 
-    node("predictedPrice").textContent = money(prediction);
+    animatePredictionPrice(prediction);
     node("predictionMeta").textContent = `Pipeline complete. Active model path: ${data.model_variant || "primary"}.`;
     node("variantView").textContent = data.model_variant || "--";
     node("canaryView").textContent = data.canary_divergence_mae === null || data.canary_divergence_mae === undefined ? "--" : Number(data.canary_divergence_mae).toFixed(4);
     node("deltaView").textContent = delta === null ? "--" : `${delta >= 0 ? "+" : ""}${delta.toFixed(3)}`;
+    renderConfidence(prediction, data.canary_divergence_mae, imageZeroRows > 0);
     renderTabs(trace);
 
     await pollSystem();
@@ -336,8 +456,20 @@ async function runInference() {
   }
 }
 
+function scrollToInputAndRun() {
+  document.querySelector(".left-pane")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  window.setTimeout(() => runInference(), 240);
+}
+
 node("sampleBtn").addEventListener("click", loadSample);
 node("runBtn").addEventListener("click", runInference);
+node("mobileRunBtn").addEventListener("click", runInference);
+node("viewerModeBtn").addEventListener("click", () => setMode("viewer"));
+node("engineerModeBtn").addEventListener("click", () => setMode("engineer"));
+node("tryDemoBtn").addEventListener("click", scrollToInputAndRun);
+node("openArchBtn").addEventListener("click", () => {
+  document.getElementById("architecturePanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
 node("simulateBroken").addEventListener("change", syncPreview);
 node("imagePreview").addEventListener("error", () => {
   node("imagePreview").style.display = "none";
@@ -353,6 +485,8 @@ document.querySelectorAll(".tab").forEach((tab) => {
 });
 
 loadSample();
+setMode("viewer");
+resetRunInsights();
 node("rawTraceBox").textContent = "Diagnostics will appear after the model responds.";
 node("serviceSnapshotBox").textContent = "Service snapshot will appear after polling /service/info.";
 fillTable("ensembleTable", []);
