@@ -5,7 +5,7 @@ This document is the technical handover guide for engineers joining the project.
 
 1. what is already implemented in this repository,
 2. how each subsystem works end-to-end,
-3. the target production architecture for 1M+ DAU with P99 < 1s,
+3. what is production-ready today vs what is still roadmap,
 4. how to start contributing safely from day one.
 
 ---
@@ -43,10 +43,16 @@ This document is the technical handover guide for engineers joining the project.
 ### E. Inference
 - Offline inference path: `src/pipelines/inference_pipeline.py` + `src/inference/predict.py`.
 - Online API baseline: `src/serving/app.py` (FastAPI) exposing:
+  - `/`,
   - `/healthz`,
   - `/readyz`,
+  - `/metrics`,
+  - `/metrics/json`,
+  - `/service/info`,
   - `/v1/warmup`,
   - `/v1/predict`.
+- Request middleware currently supports API key enforcement for `/v1/*` routes (via `API_KEY`) and request-level telemetry.
+- Data quality policy is enforced before inference (`pass` / `quarantine` / `reject`) with quarantine file output for suspicious batches.
 
 ### F. Production Serving Topology (Target)
 For 1M+ DAU and P99 < 1s, production flow should be:
@@ -124,8 +130,11 @@ Use a single feature definition source and dual materialization:
 ## 3.1 Experimentation Phase
 
 ### Current
-- Config-driven experiments under `configs/` and `src/experiments/`.
-- Artifact outputs under `experiments/` (models, logs, reports, submissions).
+- Config-driven experiments under `configs/` with orchestration via `main.py` and `src/pipelines/*`.
+- Artifact outputs under `experiments/` (models, logs, reports, submissions, bundle snapshots).
+- MLflow integration exists in training pipeline (`MLflowTracker`) and is used where tracking credentials are available.
+- Run-scoped immutable bundle layout exists (`experiments/runs/<run_id>/bundle`).
+- JSON model registry with production pointer is implemented (`experiments/registry/index.json`) with promote/rollback flows.
 
 ### Target / Required for Production
 Use **MLflow** or **Weights & Biases (W&B)** as first-class experiment tracker:
@@ -143,6 +152,12 @@ Use **MLflow** or **Weights & Biases (W&B)** as first-class experiment tracker:
   - syntax gate,
   - unit test gate (`ci_cd/tests`),
   - CLI smoke gate.
+- Additional implemented workflows include deploy, health-check, daily monitoring, training, and promotion automation:
+  - `.github/workflows/deploy.yml`
+  - `.github/workflows/health-check.yml`
+  - `.github/workflows/daily-monitoring.yml`
+  - `.github/workflows/training.yml`
+  - `.github/workflows/promote.yml`
 
 ### Target Model CI/CD
 Recommended stages:
@@ -162,6 +177,10 @@ CT should run on event and schedule:
 - periodic retraining window (daily/weekly),
 - model KPI degradation from online feedback,
 - manual release trigger for emergency patches.
+
+Current state note:
+- Policy-driven retraining logic already exists in `scripts/retrain_orchestrator.py` (drift/latency/time-since-last-train triggers).
+- Health-check and monitoring workflows are scheduled, but full closed-loop auto-retrain promotion still requires additional hardening for strict SLO governance.
 
 For each CT run record:
 - training data snapshot id,
@@ -226,6 +245,11 @@ Monitor prediction-target relationship decay:
 - calibration drift,
 - business KPI deltas.
 
+Current implementation status:
+- Service-level monitoring is implemented in `src/serving/app.py` with latency percentiles, error rate, fallback rates, DQ counters, and model/canary metadata.
+- Dashboard and alert checks are wired through scripts (`build_monitoring_dashboard.py`, `check_monitoring_alerts.py`) and CI monitoring stage.
+- Drift utilities exist but are still baseline-level in statistical depth and should be extended for production-grade sensitivity and false-positive control.
+
 ## 5.2 Logging/Observability Stack
 Use structured observability across layers:
 - **Prometheus**: metrics scraping (latency, QPS, errors, drift scores).
@@ -254,6 +278,11 @@ Rollback mechanics:
 - instant route switch to previous stable model,
 - preserve canary telemetry for RCA,
 - create incident ticket with snapshot context.
+
+Current implementation status:
+- Rollback scripts are implemented (`scripts/rollback_deployment.py`, `scripts/auto_rollback.py`).
+- Deployment readiness checks and post-deploy validation are implemented (`scripts/pre_deployment_checks.py`, `scripts/live_service_smoke_test.py`, `scripts/validate_production_model.py`).
+- Full autonomous rollback orchestration from live SLO breach to route switch is partially implemented and should be completed in the next hardening cycle.
 
 ---
 
@@ -318,9 +347,12 @@ This section is specifically for new developers joining before further improveme
 - Cross-validation trainer with fold artifact persistence and metrics.
 - Ensemble stacking support via OOF matrix + meta model.
 - Inference pipeline with post-processing and artifact discovery.
-- Baseline serving API with health/readiness/warmup/predict endpoints.
-- CI quality gates (syntax/tests/smoke).
-- SLO guidance document and production-readiness audit baseline.
+- Serving API with health/readiness/warmup/predict plus metrics/service-info endpoints.
+- Immutable run-bundle packaging and runtime contract validation.
+- Registry-based promotion/activation with deployment manifest and production tracker updates.
+- Canary routing support and optional canary-vs-primary divergence checks.
+- CI quality gates plus deploy/health-check/monitoring workflows.
+- HF Space deployment packaging and publish path.
 
 ## 7.2 Methods & Techniques Used
 - Multimodal features (text + image + numeric).
@@ -331,9 +363,10 @@ This section is specifically for new developers joining before further improveme
 
 ## 7.3 Current Operational Gaps (Known)
 - Full production feature store is not yet implemented.
-- Drift/rollback automation not yet wired end-to-end.
+- Drift/rollback is partially wired, but not yet fully autonomous and policy-complete for all incident classes.
 - Dedicated Kafka/Redis/Kubernetes runtime topology is design target, not fully integrated in this repo yet.
-- Serving optimization (ONNX/quantization/pruning) requires implementation pass.
+- Serving optimization (ONNX/quantization/pruning and tighter P99 tuning) requires implementation pass.
+- Registry backend is file-based JSON; for high-concurrency multi-team operations, a transactional metadata store is still recommended.
 
 These are the primary next workstreams for platform hardening.
 
@@ -390,14 +423,14 @@ This section converts the current high-quality ML challenge architecture into a 
   - Gap: no task-queue pattern for heavy multimodal computations.
   - Impact: API saturation risk at traffic spikes; lower tail-latency stability.
 
-4. **Model registry + automated versioning (MLflow/W&B Registry)**
-  - Current: artifacts persisted under `experiments/`.
-  - Gap: no central lifecycle controls across Staging/Production/Archived and champion-challenger policy gates.
-  - Impact: promotion/rollback and governance rely too much on manual discipline.
+4. **Registry hardening and governance depth**
+  - Current: run registry, production pointer, deployment manifests, and promotion/rollback scripts are implemented.
+  - Gap: registry is file-based and lacks multi-writer transactional guarantees, RBAC, and policy engine depth.
+  - Impact: scaling governance across teams/environments remains operationally fragile.
 
 5. **Drift detection + observability automation (Evidently/Arize + metrics stack)**
-  - Current: strong guidance exists, but not fully wired end-to-end.
-  - Gap: no always-on production drift service with alert-to-retrain orchestration hooks.
+  - Current: service metrics, monitoring scripts, health-check workflows, and drift helpers exist.
+  - Gap: no always-on advanced drift service with robust alert-to-retrain orchestration hooks.
   - Impact: delayed detection of data/concept drift and slower quality recovery.
 
 ### 10.2 Current vs Target Architecture
@@ -407,13 +440,13 @@ This section converts the current high-quality ML challenge architecture into a 
 | Data Logic | Local CSV parsing and file-based orchestration | Distributed ETL and governed data pipelines (Spark/Snowflake/Lakehouse) |
 | Feature Management | `src/features` scripts + local caches | Feature Store (online + offline) with point-in-time guarantees |
 | Inference | Synchronous REST API (FastAPI) | Async serving (task queue + workers) + model server (Triton/BentoML pattern) |
-| Experimentation | YAML configs + local folders | MLflow/W&B tracking + registry + governed promotions |
+| Experimentation | YAML configs + run bundles + optional MLflow tracking + JSON registry | Managed MLflow/W&B tracking + transactional registry + policy-driven governed promotions |
 | Scaling Model | Primarily vertical | Horizontal autoscaling on Kubernetes (HPA/KEDA) |
 
 ### 10.3 Phased implementation plan
 
 **Phase 1 (0-4 weeks): Foundation hardening**
-- Introduce MLflow tracking + model registry stages.
+- Harden existing MLflow tracking and registry conventions across all workflows.
 - Add feature schema contracts and lineage metadata to every training/inference run.
 - Add drift metrics baseline dashboards (data + concept drift starters).
 
@@ -432,7 +465,7 @@ This section converts the current high-quality ML challenge architecture into a 
 - Establish repeatable champion-challenger evaluation workflow.
 
 **Phase 4 (12+ weeks): Full production operations**
-- Add SLO-bound canary automation and rollback triggers.
+- Complete SLO-bound canary automation and closed-loop rollback triggers.
 - Wire drift-alert-to-retrain pipelines.
 - Add complete auditability: dataset snapshot, feature view hash, model version, deployment record.
 
