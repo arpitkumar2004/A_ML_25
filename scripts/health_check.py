@@ -134,6 +134,8 @@ def check_inference(
     tracker_path: str,
     sample_dataset: str = "",
     service_base_url: str = "",
+    service_timeout_seconds: float = 15.0,
+    prediction_timeout_seconds: float = 60.0,
 ) -> Dict[str, Any]:
     result = {
         "name": "Inference Smoke Test",
@@ -154,6 +156,8 @@ def check_inference(
             live = try_probe_live_prediction(
                 base_url=service_base_url,
                 expected_run_id=state["active_production_run_id"],
+                service_timeout_seconds=service_timeout_seconds,
+                prediction_timeout_seconds=prediction_timeout_seconds,
             )
             result["passed"] = live["valid"]
             result["message"] = (
@@ -193,6 +197,8 @@ def run_health_checks(
     tracker_path: str = "experiments/registry/production_tracker.json",
     sample_dataset: str = "",
     service_base_url: str = "",
+    inference_service_timeout_seconds: float = 15.0,
+    inference_prediction_timeout_seconds: float = 60.0,
 ) -> Dict[str, Any]:
     checks = []
     passed_count = 0
@@ -227,6 +233,8 @@ def run_health_checks(
             tracker_path=tracker_path,
             sample_dataset=sample_dataset,
             service_base_url=service_base_url,
+            service_timeout_seconds=inference_service_timeout_seconds,
+            prediction_timeout_seconds=inference_prediction_timeout_seconds,
         )
         checks.append(result)
         if result["passed"]:
@@ -255,6 +263,8 @@ def main() -> None:
     parser.add_argument("--tracker-path", default="experiments/registry/production_tracker.json")
     parser.add_argument("--sample-dataset", default="")
     parser.add_argument("--service-base-url", default=os.getenv("SERVICE_BASE_URL", ""))
+    parser.add_argument("--inference-service-timeout-seconds", type=float, default=15.0)
+    parser.add_argument("--inference-prediction-timeout-seconds", type=float, default=60.0)
     parser.add_argument("--output", required=True, help="Output JSON file path")
     args = parser.parse_args()
 
@@ -274,6 +284,8 @@ def main() -> None:
         tracker_path=args.tracker_path,
         sample_dataset=args.sample_dataset,
         service_base_url=args.service_base_url,
+        inference_service_timeout_seconds=args.inference_service_timeout_seconds,
+        inference_prediction_timeout_seconds=args.inference_prediction_timeout_seconds,
     )
 
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
