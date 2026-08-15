@@ -286,7 +286,7 @@
       "run_id": "train_20260315T092100Z",
       "manifest_path": "experiments\\runs\\train_20260315T092100Z\\bundle\\manifest.json",
       "stage": "train",
-      "status": "staging",
+      "status": "production",
       "tracking": {
         "mlflow": {
           "enabled": false,
@@ -297,7 +297,7 @@
       },
       "bundle_path": "experiments\\runs\\train_20260315T092100Z\\bundle",
       "created_utc": "2026-03-15T09:21:06.351537+00:00",
-      "updated_utc": "2026-03-15T09:21:06.351537+00:00"
+      "updated_utc": "2026-08-14T23:53:30.620610+00:00"
     },
     {
       "run_id": "train_20260315T093004Z",
@@ -517,7 +517,7 @@
       "run_id": "train_20260325T155219Z",
       "manifest_path": "experiments/runs/train_20260325T155219Z/bundle/manifest.json",
       "stage": "promotion",
-      "status": "production",
+      "status": "archived",
       "tracking": {
         "promoted_by": "arpitkumar2004",
         "promotion_time": "2026-03-25T17:08:07.354095",
@@ -526,7 +526,7 @@
       },
       "bundle_path": "experiments/runs/train_20260325T155219Z/bundle",
       "created_utc": "2026-03-25T15:56:58.075473+00:00",
-      "updated_utc": "2026-03-26T16:29:20.862250+00:00"
+      "updated_utc": "2026-08-14T23:53:30.620610+00:00"
     },
     {
       "run_id": "train_20260325T223816Z",
@@ -669,5 +669,5 @@
       "updated_utc": "2026-04-03T22:40:30.162174+00:00"
     }
   ],
-  "active_production_run_id": "train_20260325T155219Z"
+  "active_production_run_id": "train_20260315T092100Z"
 }

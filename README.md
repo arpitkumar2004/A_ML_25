@@ -1,599 +1,436 @@
-# A_ML_25 - Multimodal Price Prediction System
+# PrismPrice — Multimodal Product Price Intelligence Platform
 
-Production-oriented ML repository for product price prediction using text, image, and numeric signals.
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![MLflow](https://img.shields.io/badge/MLflow-Tracking-0194E2.svg)](https://mlflow.org/)
+[![DVC](https://img.shields.io/badge/DVC-Data%20Version%20Control-9CF.svg)](https://dvc.org/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![HF Space Deployment](https://img.shields.io/badge/Hugging%20Face-Space-yellow.svg)](https://arpitkumariitkgp-aml25.hf.space)
 
-This project contains:
+> End-to-end MLOps platform for estimating product prices using text, visual embeddings, and parsed unit signals.
 
-- an end-to-end offline training pipeline,
-- an inference pipeline and submission generation,
-- a bundle-backed online serving API,
-- a registry, promotion, and deployment state layer,
-- a live Hugging Face Space deployment path,
-- CI quality gates and developer onboarding assets.
+Built to bridge the gap between notebook experimentation and real-world deployment, **PrismPrice** provides a complete end-to-end ML lifecycle: offline training pipelines, out-of-fold stacking ensembles, immutable model bundle packaging, a versioned model registry, a FastAPI online serving microservice, an interactive Web Dashboard, automated CI/CD quality gates, and automated deployment to Hugging Face Spaces with zero-downtime health verification and rollback support.
 
-## 1) Project Overview
+---
 
-The system predicts product price from multimodal inputs:
+## Table of Contents
 
-- text content (titles/descriptions),
-- image representations,
-- parsed numeric features (quantity/unit and derived signals).
+- [Key Features](#key-features)
+- [System Architecture](#system-architecture)
+- [Repository Structure](#repository-structure)
+- [Data Pipeline & Schema Aliasing](#data-pipeline--schema-aliasing)
+- [Multimodal Feature Engineering](#multimodal-feature-engineering)
+- [Environment Setup & Quick Start](#environment-setup--quick-start)
+- [CLI Reference & Workflows](#cli-reference--workflows)
+- [Online Serving API & Web Dashboard](#online-serving-api--web-dashboard)
+- [Model Registry, Bundles & Governance](#model-registry-bundles--governance)
+- [Experiment Tracking & Data Versioning](#experiment-tracking--data-versioning)
+- [CI/CD & MLOps Workflows](#cicd--mlops-workflows)
+- [Centralized Documentation Hub](#centralized-documentation-hub)
+- [Contributing & Hygiene](#contributing--hygiene)
+- [License](#license)
 
-Primary metric: SMAPE (lower is better).
+---
 
-## 2) Repository Structure
+## Key Features
 
-```text
-main.py                        # CLI entrypoint (train/inference/features/ensemble/quickrun)
-configs/                       # YAML configs for training, inference, models, and features
-src/
-    data/                        # Data loading, parsing, text cleaning
-    features/                    # Text/image/numeric feature builders and reducers
-    models/                      # Model wrappers (Linear/RF/LGBM/XGB/Cat/etc.)
-    training/                    # CV utilities, trainer, metrics
-    inference/                   # Predict and postprocess pipeline
-    pipelines/                   # Train/infer/feature/ensemble orchestrators
-    serving/                     # FastAPI serving and live service validation
-ci_cd/tests/                   # CI test suite
-docs/                          # Handover, setup, and workflow docs
-experiments/                   # Artifacts: bundles, registry state, reports, submissions
-```
+- **Multimodal Feature Extraction**: Combines text representations (TF-IDF & Sentence-Transformers SBERT), visual image representations (ResNet / CLIP embeddings), and domain-specific parsed numeric signals (regex extraction for weights, volumes, counts, and log transforms).
+- **Ensemble Modeling Pipeline**: Trains baseline & gradient-boosted models (LightGBM, XGBoost, CatBoost, Random Forest, Ridge) with cross-validation OOF generation and out-of-fold stacking. Primary optimization metric: **SMAPE** (Symmetric Mean Absolute Percentage Error).
+- **Immutable Model Bundling**: Encapsulates model weights, feature transformers, schema rules, and preprocessing logic into run-scoped immutable bundles (`experiments/runs/<run_id>/bundle`) for 100% reproducible offline and online inference.
+- **Version-Controlled Model Registry**: Lightweight JSON-based registry (`experiments/registry/`) managing active production pointers, promotion stages (`staging` / `production`), and deployment manifests.
+- **FastAPI Microservice & Web UI**: Real-time REST endpoints (`/v1/predict`, `/healthz`, `/readyz`, `/metrics/json`, `/service/info`) with input schema validation, request metrics, fallback handling, and an interactive Web Dashboard (`frontend/index.html`).
+- **Production CI/CD Automation**: GitHub Actions for code hygiene, automated retrain triggers, model promotion approval gates, Hugging Face Space deployment, live probe verification, and automated rollback scripts.
+- **Dual Tracking & Data Versioning**: Integrated MLflow tracking (local & DagsHub remote) paired with DVC for versioning raw datasets and heavy model payloads.
 
-## 3) Core Architecture
+---
 
-### System architecture (image)
+## System Architecture
 
-#### High level
-![System Architecture](docs/system_archit.png)
+### High-Level Architectural Diagram
 
-#### Detailed Info Structure
-![System Architecture](docs/System_architecture.png)
+![High-Level System Architecture](docs/system_archit.png)
 
+### Detailed Component Breakdown
 
-### System structure (block diagram)
+![Detailed Component Architecture](docs/System_architecture.png)
 
-Detailed flow (Mermaid):
+### End-to-End Data & Execution Flow
 
 ```mermaid
 flowchart LR
-    A[Raw Data\ntrain.csv / test.csv] --> B[src/data\nLoad + Parse + Clean]
-    B --> C[src/features\nText/Image/Numeric Features]
+    subgraph Data & Features
+        A[Raw Data\ntrain.csv / test.csv] --> B[src/data\nLoad + Parse + Clean]
+        B --> C[src/features\nText/Image/Numeric Features]
+    end
 
-    C --> D[src/pipelines/train_pipeline.py\nTraining Orchestration]
-    D --> E[src/training + src/models\nCV Models + Optional Stacker]
-    E --> F[experiments/\nModels + OOF + Reports]
+    subgraph Pipeline Orchestration
+        C --> D[src/pipelines/train_pipeline.py\nTraining Orchestration]
+        D --> E[src/training + src/models\nCV Models + Stacking Ensemble]
+        E --> F[experiments/\nBundles + OOF + Reports]
+        
+        C --> G[src/pipelines/inference_pipeline.py\nBatch Inference]
+        F --> G
+        G --> H[src/inference/postprocess.py\nClip / Round / Format]
+        H --> I[data/submission\nPrediction CSV]
+    end
 
-    C --> G[src/pipelines/inference_pipeline.py\nBatch Inference]
-    F --> G
-    G --> H[src/inference/postprocess.py\nClip / Round / Submission Build]
-    H --> I[data/submission + experiments/submissions\nPrediction CSV]
+    subgraph Serving & UI
+        C --> J[src/serving/app.py\nFastAPI Online Serving]
+        F --> J
+        J --> K["API: /healthz /readyz /v1/predict"]
+        J --> L["Frontend: Web Dashboard\nfrontend/index.html"]
+    end
 
-    C --> J[src/serving/app.py\nFastAPI Online Serving]
-    F --> J
-    J --> K["/healthz /readyz /v1/predict"]
+    subgraph Entrypoint & MLOps
+        M[main.py CLI] --> D
+        M --> G
+        M --> J
+        M --> N[Registry: Promote / Rollback]
 
-    L[main.py CLI] --> D
-    L --> G
-    L --> J
-
-    M[CI: .github/workflows/ci.yml] --> N[compileall]
-    M --> O[pytest ci_cd/tests]
-    M --> P[python main.py --help]
+        O[GitHub Actions CI/CD] --> P[Syntax & Pytest Gate]
+        O --> Q[Retrain & DVC Pull]
+        O --> R[HF Space Deploy & Probing]
+    end
 ```
 
-### Module mapping
+---
 
-- Data ingestion and normalization: `src/data/`
-- Multimodal feature construction: `src/features/`
-- Pipeline orchestration: `src/pipelines/`
-- Model training and ensembling: `src/training/`, `src/models/`
-- Offline inference and output formatting: `src/inference/`
-- Online API serving: `src/serving/app.py`
-- Entry-point command interface: `main.py`
-- Quality gates and regression checks: `ci_cd/tests/`, `.github/workflows/ci.yml`
+## Repository Structure
 
-### Offline path (training)
+```text
+A_ML_25/
+├── main.py                        # Central CLI entrypoint (train, inference, features, ensemble, promote, etc.)
+├── configs/                       # Production YAML configurations
+│   ├── training/                  # Cross-validation & trainer configs
+│   ├── inference/                 # Batch inference pipeline configs
+│   ├── model/                     # Hyperparameter specs for LGBM, XGB, CatBoost, RF, Ridge
+│   ├── features/                  # Multimodal feature settings & dimension reducers
+│   ├── monitoring/                # Data drift & latency thresholds
+│   └── validation/                # Deployment SLO rules
+├── src/                           # Core source codebase
+│   ├── data/                      # Data loaders, schema normalizers, unit & text parsers
+│   ├── features/                  # TF-IDF/SBERT, image embeddings, numeric scalers, dim reduction
+│   ├── models/                    # Model wrappers & stacking ensembler
+│   ├── training/                  # CV utilities, loss metrics (SMAPE), trainer engine
+│   ├── inference/                 # Offline prediction runtime & postprocessing
+│   ├── pipelines/                 # End-to-end train, infer, feature & ensemble pipelines
+│   ├── registry/                  # Local model registry state store & metadata managers
+│   ├── serving/                   # FastAPI application, prediction endpoints & latency middleware
+│   ├── monitoring/                # Batch quality checks, drift calculation & alert monitors
+│   ├── validation/                # Pre-deploy checks & deployment SLO validation
+│   └── utils/                     # Bundle IO, MLflow logging, alias helpers, live probes
+├── frontend/                      # Web Monitoring & Inference Dashboard
+│   ├── index.html                 # Interactive dashboard UI
+│   ├── dashboard.js               # Dynamic API client & charting logic
+│   └── dashboard.css              # Dark-mode responsive styling
+├── ci_cd/tests/                   # Pytest automated test suite
+├── docker/                        # Dockerfiles for training and serving containers
+├── docs/                          # Central Documentation Hub & System Diagrams
+│   ├── README.md                  # Documentation Hub Index
+│   ├── ARCHITECTURE_CONTEXT.md    # System Architecture & Technical Context
+│   ├── DEVELOPER_ONBOARDING.md    # Developer Onboarding & Handover Guide
+│   ├── RUNBOOK_CLOUD_NOTEBOOKS.md # Kaggle/Colab -> DVC/MLflow -> GitHub Runbook
+│   ├── INTERVIEW_GUIDE.md         # System Design & Technical Interview Guide
+│   └── CICD_REDESIGN_PLAN.md      # CI/CD Infrastructure Plan
+├── experiments/                   # Generated pipeline & deployment state
+│   ├── runs/<run_id>/bundle/      # Immutable run-scoped model bundles
+│   ├── registry/                  # index.json, promotion logs, deployment manifests
+│   ├── oof/                       # Out-of-fold matrices & model comparison logs
+│   ├── reports/                   # Stacker performance & comparison outputs
+│   └── submissions/               # Prediction outputs & submission artifacts
+└── scripts/                       # Operational & CI/CD workflow scripts
+```
 
-1. Load dataset
-2. Parse/clean features
-3. Build multimodal feature matrix
-4. Optional dimensionality reduction
-5. CV training for base models
-6. Build OOF matrix and optional stacker
-7. Persist artifacts and reports
+---
 
-### Offline path (batch inference)
+## Data Pipeline & Schema Aliasing
 
-1. Load inference CSV
-2. Rebuild features with saved/cached transforms
-3. Load fold models + stacker
-4. Predict + postprocess
-5. Write output CSV
+The dataset pipeline standardizes raw catalog data into a unified canonical schema before feature extraction:
 
-### Online path (serving)
+### Canonical Schema
 
-FastAPI service in `src/serving/app.py`:
+| Column Name | Type | Description |
+| :--- | :--- | :--- |
+| `sample_id` | String / Int | Unique identifier for product sample |
+| `catalog_content` | String | Title, description, and bullet text |
+| `image_link` | String | URL or file path to product image |
+| `price` | Float | Target product price (Training ground truth) |
 
-- `GET /healthz`
-- `GET /readyz`
-- `GET /service/info`
-- `GET /metrics/json`
-- `POST /v1/warmup`
-- `POST /v1/predict`
+### Schema Alias Normalization (`src/utils/column_aliases.py`)
+To handle varying raw inputs (e.g. Kaggle / enterprise imports), incoming datasets are automatically mapped:
+- `unique_identifier` ➔ `sample_id`
+- `Description` ➔ `catalog_content`
+- `image_path` ➔ `image_link`
+- `Price` ➔ `price`
 
-## 4) Environment Setup
+---
+
+## Multimodal Feature Engineering
+
+The feature pipeline (`src/features/`) generates a rich representation combining three modalities:
+
+1. **Text Features**:
+   - **TF-IDF Vectorization**: Deterministic, n-gram bag-of-words representation with persisted vectorizers for train/inference parity.
+   - **SBERT Embeddings**: Dense semantic representations using `SentenceTransformers` (`all-MiniLM-L6-v2`) for text understanding.
+2. **Parsed Numeric & Unit Signals (`src/data/parse_features.py`)**:
+   - Parses regex-matched quantities, package sizes, and unit types (weight in grams, volume in ml, count per pack).
+   - Generates derived features: `parsed_total_weight_g`, `parsed_total_volume_ml`, `parsed_total_count_units`, `parsed_quantity_mentions`.
+   - Log-transforms skewed numeric signals (`parsed_value_log1p`, `parsed_weight_log1p`).
+3. **Image Features**:
+   - Dense visual embeddings extracted via pre-trained vision encoders (CLIP / ResNet) with graceful zero-vector fallback for missing URLs.
+4. **Dimensionality Reduction & Assembly**:
+   - Applies optional `TruncatedSVD` / `PCA` reduction before feeding concatenated feature matrices to downstream models.
+
+---
+
+## Environment Setup & Quick Start
 
 ### Prerequisites
+- **Python 3.10+**
+- **pip** and **virtualenv** (or conda)
 
-- Python 3.10+
-- pip
-
-### Install
+### Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/arpitkumar2004/A_ML_25.git
+cd A_ML_25
+
+# Create and activate virtual environment
+python -m venv .venv
+
+# On Windows PowerShell:
+.venv\Scripts\activate
+# On Linux/macOS:
+source .venv/bin/activate
+
+# Upgrade pip & install requirements
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### Verify
+### Verification & Smoke Test
 
 ```bash
+# Code compilation check
 python -m compileall src main.py
+
+# Run unit and integration tests
 pytest -q ci_cd/tests
+
+# Check CLI entrypoint
 python main.py --help
 ```
 
-## 5) How to Run
+---
 
-### Train
+## CLI Reference & Workflows
 
+`main.py` provides a unified command line interface for executing all pipeline operations:
+
+```bash
+# Display CLI usage instructions
+python main.py --help
+```
+
+### 1. Training Pipeline
+Train all models specified in config:
 ```bash
 python main.py train --config configs/training/final_train.yaml
 ```
-
-Train single model only:
-
+Train a specific single model (e.g., LightGBM):
 ```bash
 python main.py train --config configs/training/final_train.yaml --model lgbm
 ```
 
-### Build features only
-
+### 2. Feature Building
+Generate and cache feature matrices independently:
 ```bash
 python main.py features --config configs/features/all_features.yaml
 ```
 
-### Offline inference
-
-```bash
-python main.py inference --config configs/inference/inference.yaml
-```
-
-### Ensemble-only pipeline
-
+### 3. Stacking Ensemble
+Train stacker meta-model on existing out-of-fold predictions:
 ```bash
 python main.py ensemble --config configs/model/ensemble.yaml
 ```
 
-### Quick experiment run
+### 4. Batch Offline Inference
+Generate price predictions for test data:
+```bash
+python main.py inference --config configs/inference/inference.yaml
+```
 
+### 5. Quick Experiment Run
+Execute an end-to-end smoke test train/inference run:
 ```bash
 python main.py quickrun
 ```
 
-## 6) Serving (Local)
-
-Create local env file first:
-
+### 6. Registry Promotion & Rollback
+Promote a verified run to `staging` or `production`:
 ```bash
-cp .env.example .env
+python main.py promote --run-id train_20260325T155219Z --stage production
+```
+List all registered runs:
+```bash
+python main.py list-registry
+```
+Rollback to previous production model:
+```bash
+python main.py rollback --to-previous
 ```
 
-On Windows PowerShell:
+---
 
+## Online Serving API & Web Dashboard
+
+### Local FastAPI Service
+
+1. Copy environment variables template:
+   ```bash
+   # Linux/macOS:
+   cp .env.example .env
+   # Windows PowerShell:
+   Copy-Item .env.example .env
+   ```
+
+2. Start the Uvicorn server:
+   ```bash
+   uvicorn src.serving.app:app --host 0.0.0.0 --port 8000
+   ```
+
+3. Endpoint Reference:
+   - `GET /healthz` — Basic server liveness check.
+   - `GET /readyz` — Readiness probe (verifies model bundle loaded).
+   - `GET /service/info` — Metadata of active production run & bundle hash.
+   - `GET /metrics/json` — Request count, latency distribution (`p50`/`p95`/`p99`), error rates.
+   - `POST /v1/predict` — Perform price inference for product batch.
+
+4. Sample Prediction Request:
+   ```bash
+   curl -X POST "http://127.0.0.1:8000/v1/predict" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "records": [
+            {
+              "unique_identifier": "PROD_001",
+              "Description": "Pack of 12 Organic Earl Grey Tea Bags 50g",
+              "image_path": ""
+            }
+          ]
+        }'
+   ```
+
+### Web Monitoring & Inference Dashboard
+
+The repository includes a web frontend located in `frontend/`:
+- Access the dashboard at `http://127.0.0.1:8000/` when serving with FastAPI, or open `frontend/index.html` directly.
+- **Features**: Interactive single/batch price prediction form, real-time latency & error rate charts, active production bundle details, and system health status.
+
+---
+
+## Model Registry, Bundles & Governance
+
+To enforce reproducibility and governance, model outputs are packaged into immutable run bundles:
+
+### Directory Structure of Registered State (`experiments/registry/`)
+```text
+experiments/registry/
+├── index.json                 # Global registry index & active production pointer
+├── promotion_history.jsonl    # Audit trail log of all stage transitions
+├── deployment_manifest.json   # Verified record of live deployed services
+└── production_tracker.json    # Active production model performance metrics
+```
+
+### Current Live Production State
+- **Active Run**: `train_20260325T155219Z`
+- **Stage Target**: `production`
+- **Deployment Strategy**: `hf_space`
+- **Live Service URL**: [https://arpitkumariitkgp-aml25.hf.space](https://arpitkumariitkgp-aml25.hf.space)
+
+---
+
+## Experiment Tracking & Data Versioning
+
+All training runs automatically log parameters, metrics (CV SMAPE, train SMAPE), feature dimensions, and model artifacts.
+
+### Local MLflow Server
 ```powershell
-Copy-Item .env.example .env
-```
-
-Important: if `TEXT_METHOD=tfidf`, `TFIDF_VECTORIZER_PATH` must point to a fitted vectorizer artifact from training.
-
-Start API:
-
-```bash
-uvicorn src.serving.app:app --host 0.0.0.0 --port 8000
-```
-
-Health and readiness:
-
-```bash
-curl http://127.0.0.1:8000/healthz
-curl http://127.0.0.1:8000/readyz
-```
-
-Prediction example:
-
-```bash
-curl -X POST "http://127.0.0.1:8000/v1/predict" \
-    -H "Content-Type: application/json" \
-    -d '{
-                "records": [
-                    {"unique_identifier": 1, "Description": "Organic green tea 20 bags", "image_path": ""}
-                ]
-            }'
-```
-
-## 7) Artifacts, Registry, and Deployment State
-
-Typical generated artifacts:
-
-- `experiments/runs/<run_id>/bundle/` (immutable run-scoped model bundle)
-- `experiments/registry/index.json` (registry state and active production pointer)
-- `experiments/registry/deployment_manifest.json` (verified deployment record)
-- `experiments/registry/production_tracker.json` (active production metadata and metrics)
-- `experiments/oof/` (OOF matrix, model names)
-- `experiments/reports/` (comparison and stacker summaries)
-- `experiments/submissions/` (prediction files)
-
-Current checked-in production state points to:
-
-- active production run: `train_20260325T155219Z`
-- strategy: `hf_space`
-- status: `active`
-- deployment URL: `https://arpitkumariitkgp-aml25.hf.space`
-
-## 8) CI and Quality Gates
-
-GitHub Actions workflow in `.github/workflows/ci.yml` runs:
-
-1. dependency installation,
-2. syntax gate (`compileall`),
-3. test gate (`pytest -q ci_cd/tests`),
-4. CLI smoke gate (`python main.py --help`).
-
-## 9) Data and Experiment Configs
-
-Use YAML configs under `configs/`:
-
-- `configs/training/` for training runs and CV behavior,
-- `configs/inference/` for inference inputs/outputs,
-- `configs/model/` for model-specific hyperparameters,
-- `configs/features/` for feature settings.
-
-The CLI automatically supports nested config sections (for example, `training:` and `inference:` blocks).
-
-## 10) Operational Notes
-
-- Designed as a modular ML codebase with a real production-like release path.
-- Current serving stack is FastAPI with bundle-backed loading, registry-aware deployment state, and a Hugging Face Space deployment target.
-- The most credible current portfolio story is: train a run-scoped bundle, promote the run, deploy it to Hugging Face Space, verify live endpoints, then persist production state.
-
-### Target improvement roadmap (future plan)
-
-To move from challenge-grade ML workflows to production-grade, hyper-scalable architecture, the planned target includes:
-
-1. **Feature Store integration (Feast/Hopsworks)** for online/offline parity and point-in-time correctness.
-2. **Distributed training + Bayesian HPO** (`Ray`/`Kubeflow` + `Optuna`/`Ray Tune`) for stronger model search quality.
-3. **Asynchronous inference architecture** (`Redis`/`RabbitMQ`/`Kafka`) with `task_id`-based queue + worker execution.
-4. **Model registry lifecycle controls** (`MLflow`/`W&B`) with Champion/Challenger promotion flow.
-5. **Drift detection and observability automation** (`Evidently`/`Arize` + metrics/alerts) with retraining triggers.
-
-Current vs target trend:
-- Data logic: local CSV pipelines -> distributed ETL.
-- Feature management: script-level features -> governed online/offline feature store.
-- Inference: synchronous REST -> async queue workers + model serving layer.
-- Experimentation: local artifacts -> tracked registry lifecycle.
-- Scaling: vertical scaling -> horizontal autoscaling on Kubernetes.
-
-See:
-
-- `docs/DEVELOPER_ONBOARDING_AND_TECHNICAL_HANDOVER.md`
-- `docs/GITHUB_SECRETS_SETUP.md`
-- `docs/KAGGLE_COLAB_DVC_MLFLOW_GITHUB_RUNBOOK.md`
-
-Detailed execution roadmap: `docs/DEVELOPER_ONBOARDING_AND_TECHNICAL_HANDOVER.md` section "10) Target Future Development Plan (Gap Closure Roadmap)".
-
-## 11) Experiment Tracking (MLflow and DagsHub)
-
-Training and inference runs are tracked through `src/utils/mlflow_utils.py`.
-
-### Local MLflow tracking
-
-1. Start local MLflow server:
-
-```powershell
+# Start local MLflow UI server on port 5000
 ./scripts/start_mlflow_server.ps1 -Port 5000
-```
 
-1. Set tracking env vars:
-
-```powershell
+# Set environment variables
 $env:MLFLOW_ENABLED='1'
 $env:MLFLOW_TRACKING_URI='http://127.0.0.1:5000'
-```
-
-1. Run training experiment:
-
-```powershell
 $env:PYTHONPATH='.'
+
+# Execute training run
 python main.py train --config configs/training/final_train.yaml
 ```
 
-### DagsHub-backed tracking
-
-Use environment variables for credentials. Do not hardcode tokens in YAML.
-
-```powershell
-$env:MLFLOW_ENABLED='1'
-$env:DAGSHUB_MLFLOW_ENABLED='1'
-$env:DAGSHUB_REPO_OWNER='<your_dagshub_username_or_org>'
-$env:DAGSHUB_REPO_NAME='A_ML_25'
-$env:DAGSHUB_TOKEN='<your_dagshub_access_token>'
-```
-
-Then run:
-
-```powershell
-$env:PYTHONPATH='.'
-python main.py train --config configs/training/final_train.yaml
-```
-
-Expected outputs after run:
-
-- MLflow run metadata in the generated manifest under `outputs.mlflow`.
-- Registry linkage in `experiments/registry/index.json` under `tracking.mlflow`.
-- Run visible in DagsHub experiment UI when DagsHub mode is enabled.
-
-## 12) Contribution Workflow
-
-1. Create focused changes in one subsystem.
-2. Add/update tests under `ci_cd/tests` for behavior changes.
-3. Run local quality checks before PR.
-4. Keep config and artifact paths consistent with existing conventions.
-
-## 13) License and Usage
-
-This repository is intended for ML challenge work and production-learning workflows.
-Ensure model/data usage follows challenge rules and organizational policy.
-
-## 14) DVC + Git Best Practices (Implemented)
-
-This repository follows a strict split:
-
-- Git tracks: code, configs, docs, CI, and `.dvc` pointer metadata.
-- DVC tracks: large datasets, feature caches, model artifacts, and generated experiment payloads.
-
-### Daily workflow
-
-1. Pull code and data pointers:
-
+### Remote DagsHub Integration & DVC Workflow
 ```bash
-git pull
+# Pull latest datasets and model binaries
 dvc pull
-```
 
-1. Run training/inference and update artifacts.
+# Execute training with MLflow tracking
+python main.py train --config configs/training/final_train.yaml
 
-1. Track changed payloads with DVC:
-
-```bash
-dvc add data/raw/train.csv data/raw/test.csv
-dvc add data/processed/dimred.joblib data/processed/features.joblib
-dvc add experiments/oof/oof_matrix.joblib experiments/reports/model_comparison.csv
-```
-
-1. Commit pointers and related code/config together:
-
-```bash
-git add .
-git commit -m "feat: update model and DVC pointers"
-```
-
-1. Push data cache then code:
-
-```bash
+# Push updated binary data pointers
 dvc push
 git push
 ```
 
-If you keep DagsHub credentials in `.env`, use the helper script so DVC commands automatically pick them up:
+---
 
-```powershell
-./scripts/dvc_with_env.ps1 push -r origin --all-commits
-./scripts/dvc_with_env.ps1 pull -r origin
-```
+## CI/CD & MLOps Workflows
 
-### Enforced guardrails
-
-- `.gitignore` blocks large payload directories while allowing `.dvc` files.
-- CI runs `python scripts/check_repo_hygiene.py` to fail PRs if binary payloads are committed directly to Git.
-- If `dvc push` fails due credentials, data pointers may be in Git but remote data will not be available to collaborators until push succeeds.
-
-## 15) CI/CD Automation
-
-Production-oriented ML delivery pipeline with training, promotion, verified deployment, and health monitoring.
-
-### Overview
-
-Phase 3 automates the current portfolio deployment lifecycle:
+Automated GitHub Actions workflows in `.github/workflows/` manage quality assurance and continuous deployment:
 
 ```text
-Git Push -> CI Gate -> Drift Check -> Training -> Promotion Approval -> HF Space Deploy -> Live Validation -> Production State Update
+┌────────────────┐     ┌────────────────┐     ┌────────────────┐     ┌────────────────┐
+│  PR / Push     │ ──► │ Daily Retrain  │ ──► │ Model Promote  │ ──► │  HF Deploy &   │
+│  (ci.yml)      │     │ (training.yml) │     │ (promote.yml)  │     │ Live Validation│
+└────────────────┘     └────────────────┘     └────────────────┘     └────────────────┘
 ```
 
-### Key Components
+1. **`ci.yml` (Quality Gate)**: Triggers on PR/push. Checks code compilation (`compileall`), runs `pytest` test suite, validates CLI `--help` flags, and executes repository hygiene checks (`check_repo_hygiene.py`).
+2. **`training.yml` (Scheduled Training)**: Runs daily at 22:00 UTC. Checks data drift, pulls DVC data, prepares features, trains canonical model bundle, logs to MLflow, and registers candidate run.
+3. **`promote.yml` (Model Promotion)**: Validates candidate run performance against baseline thresholds, requires environment approval, updates registry index, and tags production candidate.
+4. **`deploy.yml` (Live Deployment)**: Restores immutable bundle, builds deployment package, deploys to Hugging Face Space, waits for `/readyz`, performs live prediction probes, updates `deployment_manifest.json`, and activates production tracker.
+5. **`health-check.yml` & `daily-monitoring.yml`**: Runs health verification probes every 6 hours and monitors prediction latency and data drift.
 
-#### 1. Training Pipeline (`.github/workflows/training.yml`)
-- Trigger: daily at `22:00 UTC` or manual `workflow_dispatch`
-- Flow:
-  1. check data drift
-  2. pull data through DVC
-  3. prepare training data
-  4. train and validate a canonical bundle-backed run
-  5. register the run in `experiments/registry/`
-  6. persist workflow outputs and smoke-test artifacts
-- Main output: canonical local `run_id`, immutable bundle, registry entry, metrics artifacts
+---
 
-#### 2. Promotion Workflow (`.github/workflows/promote.yml`)
-- Supported stages: `staging` and `production`
-- Flow:
-  1. resolve canonical run ID
-  2. restore durable bundle
-  3. validate promotion thresholds
-  4. require environment approval for production
-  5. update registry state and tag approved releases
-- Important distinction: promotion means approved for deployment, not yet live
+## Centralized Documentation Hub
 
-#### 3. Deployment Workflow (`.github/workflows/deploy.yml`)
-- Deployment target: Hugging Face Space
-- Flow:
-  1. resolve canonical run ID
-  2. restore immutable bundle
-  3. run pre-deployment checks
-  4. run bundle-backed inference smoke test
-  5. create HF Space package
-  6. publish to Hugging Face Space
-  7. wait for `/readyz` and `/service/info` to report the expected run
-  8. run live prediction smoke test
-  9. write `deployment_manifest.json`
-  10. activate the production run in the registry
-  11. write `production_tracker.json`
-  12. persist verified deployment state back to Git
+Explore the complete documentation catalog in the [`docs/`](docs/README.md) directory:
 
-#### 4. Health Check Workflow (`.github/workflows/health-check.yml`)
-- Frequency: every 6 hours or manual trigger
-- Checks:
-  - MLflow connectivity when configured
-  - production model loadability
-  - registry consistency
-  - inference health
-  - live production validation when service URL is available
-- Uses the active production run and can derive the HF Space URL from workflow variables
+| Document | Link |
+| :--- | :--- |
+| **Documentation Hub Index** | [`docs/README.md`](docs/README.md) |
+| **Architecture & System Deep-Dive** | [`docs/ARCHITECTURE_CONTEXT.md`](docs/ARCHITECTURE_CONTEXT.md) |
+| **Developer Onboarding & Handover** | [`docs/DEVELOPER_ONBOARDING.md`](docs/DEVELOPER_ONBOARDING.md) |
+| **Cloud Notebook & GPU Runbook** | [`docs/RUNBOOK_CLOUD_NOTEBOOKS.md`](docs/RUNBOOK_CLOUD_NOTEBOOKS.md) |
+| **System Design & Interview Guide** | [`docs/INTERVIEW_GUIDE.md`](docs/INTERVIEW_GUIDE.md) |
+| **CI/CD & MLOps Infrastructure Plan** | [`docs/CICD_REDESIGN_PLAN.md`](docs/CICD_REDESIGN_PLAN.md) |
 
-#### 5. Daily Monitoring Workflow (`.github/workflows/daily-monitoring.yml`)
-- Builds monitoring artifacts and checks alert conditions on a schedule
+---
 
-### Configuration
+## Contributing & Hygiene
 
-#### GitHub Secrets and Variables
-Set these in `Settings -> Secrets and variables -> Actions`:
+1. Ensure all code changes are isolated and modular within `src/`.
+2. Add corresponding unit and integration tests under `ci_cd/tests/`.
+3. Verify repository hygiene before submitting a Pull Request:
+   ```bash
+   python scripts/check_repo_hygiene.py
+   pytest -q ci_cd/tests
+   ```
+4. Never commit binary datasets or model files directly to Git; track them with `dvc add`.
 
-```text
-MLFLOW_TRACKING_URI
-MLFLOW_TRACKING_USERNAME
-MLFLOW_TRACKING_PASSWORD
-DAGSHUB_USERNAME
-DAGSHUB_TOKEN
-AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY
-HF_SPACE_TOKEN
-PRODUCTION_SERVICE_BASE_URL   # optional
-HF_SPACE_REPO_ID              # variable, optional if using the default repo id
-```
+---
 
-See `docs/GITHUB_SECRETS_SETUP.md` for setup guidance.
+## License
 
-#### Model Registry
-Located at `experiments/registry/`:
-
-```text
-index.json                 # run registry and active production pointer
-promotion_history.jsonl    # promotion audit log
-deployment_manifest.json   # verified deployment record
-production_tracker.json    # active production metadata + metrics
-```
-
-### Quick Start
-
-#### 1. Trigger Training
-```bash
-gh workflow run training.yml -f force_retrain=true -f model_config=configs/training/final_train.yaml
-```
-
-#### 2. Promote a Run
-Open `Actions -> Model Promotion -> Run workflow`:
-- enter the canonical `run_id`
-- choose `staging` or `production`
-- review promotion validation artifacts in the workflow logs
-
-#### 3. Deploy to Hugging Face Space
-Open `Actions -> Deploy Live Service -> Run workflow`:
-- enter the approved `run_id`
-- enter `space_repo_id` such as `arpitkumariitkgp/aml25`
-- set `create_if_missing=true` only when bootstrapping a new Space
-
-#### 4. Monitor Health
-Health checks run automatically every 6 hours. Use `health-check.yml` for manual checks and `daily-monitoring.yml` for scheduled monitoring artifacts.
-
-### Workflow Diagram
-
-```text
-Push/PR -> ci.yml
-Schedule/manual -> training.yml -> staging registry entry
-Manual approval -> promote.yml -> production-approved run
-Manual deploy -> deploy.yml -> HF Space publish -> live verification -> deployment manifest + production tracker update
-Scheduled/manual -> health-check.yml -> production validation
-Scheduled -> daily-monitoring.yml -> monitoring artifacts and alerts
-```
-
-### Rollback Procedures
-
-Manual rollback:
-
-```bash
-python scripts/rollback_deployment.py \
-  --to-previous-production \
-  --reason "Manual: detected latency spike"
-```
-
-Operationally, rollback uses the previous production run recorded in the deployment state and updates registry-tracked production metadata.
-
-### Observability and Alerting
-
-Key metrics to monitor:
-- SMAPE or quality trend from training and promotion checks
-- prediction latency (`p50`, `p95`, `p99`)
-- error rate / exception rate
-- data drift magnitude
-- model freshness
-- deployment success rate
-
-Representative alert thresholds:
-
-```text
-WARN if latency_p95 > 2.0s | CRITICAL if > 5.0s
-WARN if error_rate > 0.02  | CRITICAL if > 0.05
-WARN if drift > 0.10       | CRITICAL if > 0.25
-```
-
-### Documentation
-
-- `docs/DEVELOPER_ONBOARDING_AND_TECHNICAL_HANDOVER.md`
-- `docs/GITHUB_SECRETS_SETUP.md`
-- `docs/KAGGLE_COLAB_DVC_MLFLOW_GITHUB_RUNBOOK.md`
-
-### Common Tasks
-
-#### Force Retrain
-```bash
-gh workflow run training.yml -f force_retrain=true -f model_config=configs/training/final_train.yaml
-```
-
-#### Check Registry State
-```bash
-cat experiments/registry/index.json | jq '.'
-```
-
-#### View Promotion History
-```bash
-cat experiments/registry/promotion_history.jsonl | jq '.'
-```
-
-#### Manual Health Check
-```bash
-python scripts/health_check.py \
-  --check-mlflow \
-  --check-production-model \
-  --check-registry \
-  --check-inference \
-  --output /tmp/health.json
-```
+This project is licensed under the [MIT License](LICENSE).

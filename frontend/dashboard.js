@@ -14,7 +14,7 @@ const SAMPLE = {
   value: 288.0,
   unit: "Fl Oz",
   category: "Breakfast / Pantry",
-  reference_price: 12.195
+  reference_price: 2.195
 };
 
 const node = (id) => document.getElementById(id);
@@ -301,8 +301,8 @@ function startTerminal(runId) {
     ["0.12s", "Extracting parsed numeric signals from text."],
     ["0.45s", "Generating text embeddings for serving payload."],
     ["0.82s", form.image_link ? "Resolving image input and checking fallback safety." : "Image input missing. Zero-vector fallback path available."],
-    ["1.12s", "Executing base models (LGBM, XGB, RF)." ],
-    ["1.30s", "Awaiting ensemble stacker output." ]
+    ["1.12s", "Executing base models (LGBM, XGB, RF)."],
+    ["1.30s", "Awaiting ensemble stacker output."]
   ];
   steps.forEach(([seconds, text], index) => {
     window.setTimeout(() => pushTerminalLine(runId, seconds, text), index * 170);
