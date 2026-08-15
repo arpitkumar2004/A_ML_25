@@ -6,8 +6,8 @@ permissions:
   actions: read
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'
+  # schedule:
+  #   - cron: '0 */6 * * *'
   workflow_dispatch:
   workflow_call:
     secrets:
@@ -90,6 +90,8 @@ jobs:
             --check-registry \
             --check-inference \
             --service-base-url "$SERVICE_BASE_URL" \
+            --inference-service-timeout-seconds 15 \
+            --inference-prediction-timeout-seconds 60 \
             --output /tmp/health_report.json || true
 
           python -c "

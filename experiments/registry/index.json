@@ -667,6 +667,230 @@
       "bundle_path": "experiments/runs/train_20260403T223526Z/bundle",
       "created_utc": "2026-04-03T22:40:19.808743+00:00",
       "updated_utc": "2026-04-03T22:40:30.162174+00:00"
+    },
+    {
+      "run_id": "train_20260404T223136Z",
+      "manifest_path": "experiments/runs/train_20260404T223136Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-04T22:35:38.632323"
+      },
+      "bundle_path": "experiments/runs/train_20260404T223136Z/bundle",
+      "created_utc": "2026-04-04T22:35:27.991271+00:00",
+      "updated_utc": "2026-04-04T22:35:38.632531+00:00"
+    },
+    {
+      "run_id": "train_20260405T223259Z",
+      "manifest_path": "experiments/runs/train_20260405T223259Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-05T22:36:52.517031"
+      },
+      "bundle_path": "experiments/runs/train_20260405T223259Z/bundle",
+      "created_utc": "2026-04-05T22:36:42.138995+00:00",
+      "updated_utc": "2026-04-05T22:36:52.517229+00:00"
+    },
+    {
+      "run_id": "train_20260406T223855Z",
+      "manifest_path": "experiments/runs/train_20260406T223855Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-06T22:43:38.224462"
+      },
+      "bundle_path": "experiments/runs/train_20260406T223855Z/bundle",
+      "created_utc": "2026-04-06T22:43:27.890559+00:00",
+      "updated_utc": "2026-04-06T22:43:38.224636+00:00"
+    },
+    {
+      "run_id": "train_20260407T224046Z",
+      "manifest_path": "experiments/runs/train_20260407T224046Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-07T22:46:21.113185"
+      },
+      "bundle_path": "experiments/runs/train_20260407T224046Z/bundle",
+      "created_utc": "2026-04-07T22:46:10.202377+00:00",
+      "updated_utc": "2026-04-07T22:46:21.113387+00:00"
+    },
+    {
+      "run_id": "train_20260408T224117Z",
+      "manifest_path": "experiments/runs/train_20260408T224117Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-08T22:45:01.930278"
+      },
+      "bundle_path": "experiments/runs/train_20260408T224117Z/bundle",
+      "created_utc": "2026-04-08T22:44:51.142458+00:00",
+      "updated_utc": "2026-04-08T22:45:01.930500+00:00"
+    },
+    {
+      "run_id": "train_20260409T224321Z",
+      "manifest_path": "experiments/runs/train_20260409T224321Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-09T22:48:25.585640"
+      },
+      "bundle_path": "experiments/runs/train_20260409T224321Z/bundle",
+      "created_utc": "2026-04-09T22:48:15.224077+00:00",
+      "updated_utc": "2026-04-09T22:48:25.585849+00:00"
+    },
+    {
+      "run_id": "train_20260410T223952Z",
+      "manifest_path": "experiments/runs/train_20260410T223952Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-10T22:45:09.822391"
+      },
+      "bundle_path": "experiments/runs/train_20260410T223952Z/bundle",
+      "created_utc": "2026-04-10T22:44:59.161219+00:00",
+      "updated_utc": "2026-04-10T22:45:09.822607+00:00"
+    },
+    {
+      "run_id": "train_20260411T223400Z",
+      "manifest_path": "experiments/runs/train_20260411T223400Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-11T22:38:55.907098"
+      },
+      "bundle_path": "experiments/runs/train_20260411T223400Z/bundle",
+      "created_utc": "2026-04-11T22:38:45.366384+00:00",
+      "updated_utc": "2026-04-11T22:38:55.907332+00:00"
+    },
+    {
+      "run_id": "train_20260412T223557Z",
+      "manifest_path": "experiments/runs/train_20260412T223557Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-12T22:39:39.498224"
+      },
+      "bundle_path": "experiments/runs/train_20260412T223557Z/bundle",
+      "created_utc": "2026-04-12T22:39:28.240837+00:00",
+      "updated_utc": "2026-04-12T22:39:39.498445+00:00"
+    },
+    {
+      "run_id": "train_20260413T224534Z",
+      "manifest_path": "experiments/runs/train_20260413T224534Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-13T22:49:23.703805"
+      },
+      "bundle_path": "experiments/runs/train_20260413T224534Z/bundle",
+      "created_utc": "2026-04-13T22:49:12.849909+00:00",
+      "updated_utc": "2026-04-13T22:49:23.704033+00:00"
+    },
+    {
+      "run_id": "train_20260414T224713Z",
+      "manifest_path": "experiments/runs/train_20260414T224713Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-14T22:51:40.615240"
+      },
+      "bundle_path": "experiments/runs/train_20260414T224713Z/bundle",
+      "created_utc": "2026-04-14T22:51:30.287570+00:00",
+      "updated_utc": "2026-04-14T22:51:40.615412+00:00"
+    },
+    {
+      "run_id": "train_20260415T224405Z",
+      "manifest_path": "experiments/runs/train_20260415T224405Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-15T22:47:44.550898"
+      },
+      "bundle_path": "experiments/runs/train_20260415T224405Z/bundle",
+      "created_utc": "2026-04-15T22:47:34.001633+00:00",
+      "updated_utc": "2026-04-15T22:47:44.551141+00:00"
+    },
+    {
+      "run_id": "train_20260416T224210Z",
+      "manifest_path": "experiments/runs/train_20260416T224210Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-16T22:45:59.595371"
+      },
+      "bundle_path": "experiments/runs/train_20260416T224210Z/bundle",
+      "created_utc": "2026-04-16T22:45:48.629367+00:00",
+      "updated_utc": "2026-04-16T22:45:59.595629+00:00"
+    },
+    {
+      "run_id": "train_20260417T224107Z",
+      "manifest_path": "experiments/runs/train_20260417T224107Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-17T22:45:43.349851"
+      },
+      "bundle_path": "experiments/runs/train_20260417T224107Z/bundle",
+      "created_utc": "2026-04-17T22:45:32.423431+00:00",
+      "updated_utc": "2026-04-17T22:45:43.350146+00:00"
+    },
+    {
+      "run_id": "train_20260418T223653Z",
+      "manifest_path": "experiments/runs/train_20260418T223653Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-18T22:42:18.279115"
+      },
+      "bundle_path": "experiments/runs/train_20260418T223653Z/bundle",
+      "created_utc": "2026-04-18T22:42:07.861283+00:00",
+      "updated_utc": "2026-04-18T22:42:18.279345+00:00"
+    },
+    {
+      "run_id": "train_20260419T223829Z",
+      "manifest_path": "experiments/runs/train_20260419T223829Z/bundle/manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "automated_training": "true",
+        "drift_reason": "Bootstrap training required because baseline stats are missing",
+        "registered_at": "2026-04-19T22:43:02.273180"
+      },
+      "bundle_path": "experiments/runs/train_20260419T223829Z/bundle",
+      "created_utc": "2026-04-19T22:42:51.745855+00:00",
+      "updated_utc": "2026-04-19T22:43:02.273349+00:00"
     }
   ],
   "active_production_run_id": "train_20260315T092100Z"
