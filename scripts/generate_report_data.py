@@ -281,10 +281,22 @@ def benchmark_model_suite(df: pd.DataFrame) -> dict:
         oof_predictions_dict["Ridge"][val_idx] = np.expm1(p_rdg_log)
         fold_results["Ridge"].append(smape(y_val_raw, np.expm1(p_rdg_log)))
 
+        # Detect GPU availability
+        has_gpu = False
+        try:
+            import torch
+            has_gpu = torch.cuda.is_available()
+        except Exception:
+            pass
+
         # LightGBM
         if lgb_avail:
-            m_lgb = lgb.LGBMRegressor(n_estimators=100, learning_rate=0.05, verbose=-1, random_state=42)
-            m_lgb.fit(X_tr_sel, y_tr)
+            try:
+                m_lgb = lgb.LGBMRegressor(n_estimators=100, learning_rate=0.05, verbose=-1, random_state=42, device="gpu" if has_gpu else "cpu")
+                m_lgb.fit(X_tr_sel, y_tr)
+            except Exception:
+                m_lgb = lgb.LGBMRegressor(n_estimators=100, learning_rate=0.05, verbose=-1, random_state=42, n_jobs=-1)
+                m_lgb.fit(X_tr_sel, y_tr)
             p_lgb_log = m_lgb.predict(X_va_sel)
             fold_preds["LightGBM"] = (m_lgb.predict(X_tr_sel), p_lgb_log)
             oof_predictions_dict["LightGBM"][val_idx] = np.expm1(p_lgb_log)
@@ -292,8 +304,12 @@ def benchmark_model_suite(df: pd.DataFrame) -> dict:
 
         # XGBoost
         if xgb_avail:
-            m_xgb = xgb.XGBRegressor(n_estimators=100, learning_rate=0.05, random_state=42, verbosity=0)
-            m_xgb.fit(X_tr_sel, y_tr)
+            try:
+                m_xgb = xgb.XGBRegressor(n_estimators=100, learning_rate=0.05, random_state=42, verbosity=0, tree_method="hist", device="cuda" if has_gpu else "cpu")
+                m_xgb.fit(X_tr_sel, y_tr)
+            except Exception:
+                m_xgb = xgb.XGBRegressor(n_estimators=100, learning_rate=0.05, random_state=42, verbosity=0, n_jobs=-1)
+                m_xgb.fit(X_tr_sel, y_tr)
             p_xgb_log = m_xgb.predict(X_va_sel)
             fold_preds["XGBoost"] = (m_xgb.predict(X_tr_sel), p_xgb_log)
             oof_predictions_dict["XGBoost"][val_idx] = np.expm1(p_xgb_log)
@@ -301,8 +317,12 @@ def benchmark_model_suite(df: pd.DataFrame) -> dict:
 
         # CatBoost / GradientBoosting
         if cat_avail:
-            m_cat = CatBoostRegressor(iterations=100, learning_rate=0.05, verbose=0, random_seed=42)
-            m_cat.fit(X_tr_sel, y_tr)
+            try:
+                m_cat = CatBoostRegressor(iterations=100, learning_rate=0.05, verbose=0, random_seed=42, task_type="GPU" if has_gpu else "CPU")
+                m_cat.fit(X_tr_sel, y_tr)
+            except Exception:
+                m_cat = CatBoostRegressor(iterations=100, learning_rate=0.05, verbose=0, random_seed=42)
+                m_cat.fit(X_tr_sel, y_tr)
             p_cat_log = m_cat.predict(X_va_sel)
             fold_preds["CatBoost"] = (m_cat.predict(X_tr_sel), p_cat_log)
             oof_predictions_dict["CatBoost"][val_idx] = np.expm1(p_cat_log)

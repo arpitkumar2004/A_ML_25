@@ -19,23 +19,52 @@ class XGBModel(BaseModel):
         if not XGB_AVAILABLE:
             raise ImportError("xgboost is not installed. Install xgboost to use XGBModel.") from XGB_ERROR
         params = params or {}
-        self.model = XGBRegressor(
-            n_estimators=params.get("n_estimators", 500),
-            learning_rate=params.get("learning_rate", 0.05),
-            max_depth=params.get("max_depth", 6),
-            subsample=params.get("subsample", 1.0),
-            colsample_bytree=params.get("colsample_bytree", 1.0),
-            random_state=params.get("random_state", 42),
-            n_jobs=params.get("n_jobs", -1),
-            objective="reg:squarederror",
-        )
-        logger.info(f"XGBModel init params: {params}")
+        
+        has_gpu = False
+        try:
+            import torch
+            has_gpu = torch.cuda.is_available()
+        except Exception:
+            pass
+
+        default_params = {
+            "n_estimators": params.get("n_estimators", 500),
+            "learning_rate": params.get("learning_rate", 0.05),
+            "max_depth": params.get("max_depth", 6),
+            "subsample": params.get("subsample", 1.0),
+            "colsample_bytree": params.get("colsample_bytree", 1.0),
+            "random_state": params.get("random_state", 42),
+            "n_jobs": params.get("n_jobs", -1),
+            "objective": "reg:squarederror",
+        }
+
+        if has_gpu:
+            default_params.update({
+                "tree_method": "hist",
+                "device": "cuda"
+            })
+            logger.info("⚡ XGBModel GPU Acceleration Enabled (device='cuda', tree_method='hist')")
+        else:
+            logger.info("ℹ️ XGBModel running in CPU mode.")
+
+        default_params.update(params)
+        self.model = XGBRegressor(**default_params)
+        logger.info(f"XGBModel init params: {default_params}")
 
     def fit(self, X, y, eval_set=None):
-        if eval_set:
-            self.model.fit(X, y, eval_set=eval_set, early_stopping_rounds=50, verbose=False)
-        else:
-            self.model.fit(X, y)
+        try:
+            if eval_set:
+                self.model.fit(X, y, eval_set=eval_set, early_stopping_rounds=50, verbose=False)
+            else:
+                self.model.fit(X, y)
+        except Exception as e:
+            logger.warning(f"XGBoost fit failed on primary device ({e}). Retrying with CPU fallback...")
+            self.model.set_params(tree_method="hist", device="cpu", n_jobs=-1)
+            if eval_set:
+                self.model.fit(X, y, eval_set=eval_set, early_stopping_rounds=50, verbose=False)
+            else:
+                self.model.fit(X, y)
 
     def predict(self, X):
         return self.model.predict(X)
+
