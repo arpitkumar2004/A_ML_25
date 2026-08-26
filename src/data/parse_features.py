@@ -136,12 +136,20 @@ class Parser:
     @staticmethod
     def add_parsed_features(df: pd.DataFrame, text_col: str = "catalog_content") -> pd.DataFrame:
         df = df.copy()
-        df[f"{text_col}_clean_len"] = df[text_col].fillna("").astype(str).apply(len)
-        df["parsed_ounces"] = df[text_col].fillna("").astype(str).apply(Parser.parse_ounces)
-        vals_units = df[text_col].fillna("").astype(str).apply(Parser.parse_value_unit)
+        raw_texts = df[text_col].fillna("").astype(str)
+
+        # 1. Text Formatting & Complexity Features
+        df[f"{text_col}_clean_len"] = raw_texts.apply(len)
+        df[f"{text_col}_word_count"] = raw_texts.apply(lambda t: len(t.split()))
+        df[f"{text_col}_uppercase_ratio"] = raw_texts.apply(lambda t: sum(1 for c in t if c.isupper()) / max(len(t), 1))
+        df[f"{text_col}_digit_ratio"] = raw_texts.apply(lambda t: sum(1 for c in t if c.isdigit()) / max(len(t), 1))
+
+        # 2. Parsed Quantity Extraction
+        df["parsed_ounces"] = raw_texts.apply(Parser.parse_ounces)
+        vals_units = raw_texts.apply(Parser.parse_value_unit)
         df["parsed_value"] = vals_units.apply(lambda x: x[0]).astype(float)
         df["parsed_unit"] = vals_units.apply(lambda x: x[1]).astype(str)
-        quantity_stats = df[text_col].fillna("").astype(str).apply(Parser._normalized_quantity_stats).apply(pd.Series)
+        quantity_stats = raw_texts.apply(Parser._normalized_quantity_stats).apply(pd.Series)
         quantity_stats = quantity_stats.rename(
             columns={
                 "total_weight_g": "parsed_total_weight_g",
@@ -153,11 +161,48 @@ class Parser:
         )
         df = pd.concat([df, quantity_stats], axis=1)
 
-        # derived: value normalized (will convert units later)
+        # 3. Log Transforms & Unit Ratios
         df["parsed_value_log1p"] = np.log1p(df["parsed_value"].fillna(0.0).astype(float))
         df["parsed_weight_log1p"] = np.log1p(df["parsed_total_weight_g"].fillna(0.0).astype(float))
         df["parsed_volume_log1p"] = np.log1p(df["parsed_total_volume_ml"].fillna(0.0).astype(float))
         df["parsed_count_log1p"] = np.log1p(df["parsed_total_count_units"].fillna(0.0).astype(float))
+
+        # Advanced Unit Ratios (Per Pack / Per Gram / Per ML)
+        df["parsed_weight_per_unit"] = np.log1p(
+            df["parsed_total_weight_g"] / (df["parsed_total_count_units"].replace(0.0, 1.0))
+        )
+        df["parsed_volume_per_unit"] = np.log1p(
+            df["parsed_total_volume_ml"] / (df["parsed_total_count_units"].replace(0.0, 1.0))
+        )
+        df["parsed_interaction_weight_count"] = df["parsed_weight_log1p"] * df["parsed_count_log1p"]
+
+        # 4. Domain Pricing Specific Density & Sub-Linear Power Elasticity
+        # Specific Mass Density (grams per ml)
+        df["parsed_mass_density"] = np.log1p(
+            df["parsed_total_weight_g"] / (df["parsed_total_volume_ml"] + 1.0)
+        )
+        # Sub-linear Bulk Discount Elasticity Power Features (Quantity^0.75)
+        df["parsed_weight_power_075"] = np.power(df["parsed_total_weight_g"].fillna(0.0), 0.75)
+        df["parsed_volume_power_075"] = np.power(df["parsed_total_volume_ml"].fillna(0.0), 0.75)
+        df["parsed_count_power_075"] = np.power(df["parsed_total_count_units"].fillna(0.0), 0.75)
+
+        # 5. Specification Keyword Flags (High-Impact Pricing Signals)
+        lowered = raw_texts.str.lower()
+        df["spec_is_organic"] = lowered.apply(lambda t: 1.0 if any(k in t for k in ["organic", "usda", "bio"]) else 0.0)
+        df["spec_is_premium"] = lowered.apply(lambda t: 1.0 if any(k in t for k in ["premium", "pro", "heavy duty", "titanium", "gold", "deluxe"]) else 0.0)
+        df["spec_is_bulk_value"] = lowered.apply(lambda t: 1.0 if any(k in t for k in ["bulk", "family size", "value pack", "economy", "refill"]) else 0.0)
+        df["spec_is_sample_travel"] = lowered.apply(lambda t: 1.0 if any(k in t for k in ["sample", "travel size", "mini", "trial"]) else 0.0)
+        df["spec_is_multipack"] = lowered.apply(lambda t: 1.0 if any(k in t for k in ["multipack", "combo", "bundle", "pack of", "set of"]) else 0.0)
+
+        # Unit Domain Category Flags
+        df["unit_domain_weight"] = (df["parsed_total_weight_g"] > 0).astype(float)
+        df["unit_domain_volume"] = (df["parsed_total_volume_ml"] > 0).astype(float)
+        df["unit_domain_count"] = (df["parsed_total_count_units"] > 0).astype(float)
+
+        # Missing Image Signal
+        if "image_link" in df.columns:
+            df["image_is_missing"] = df["image_link"].fillna("").apply(lambda x: 1.0 if not str(x).strip() else 0.0)
+
         return df
 
 

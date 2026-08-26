@@ -47,6 +47,10 @@ def main():
     # ---- QUICKRUN ----
     quick_parser = subparsers.add_parser("quickrun", help="Run full demo: train all + UMAP + stacking + compare")
 
+    # ---- GENERATE REPORT ----
+    report_parser = subparsers.add_parser("generate-report", help="Run empirical benchmarks and generate report data & plots")
+    report_parser.add_argument("--data", type=str, default=None, help="Path to raw CSV dataset")
+
     # ---- REGISTRY PROMOTION ----
     promote_parser = subparsers.add_parser("promote", help="Promote a run_id in the model registry")
     promote_parser.add_argument("--run_id", type=str, required=True, help="Run ID to promote")
@@ -114,6 +118,11 @@ def main():
     elif args.command == "quickrun":
         from src.experiments.exp_quick_run import main as run_quick_experiment
         run_quick_experiment()
+
+    elif args.command == "generate-report":
+        from scripts.generate_report_data import main as run_report_generator
+        sys.argv = [sys.argv[0]] + (["--data", args.data] if args.data else [])
+        run_report_generator()
 
     elif args.command == "promote":
         idx_path = promote_run(run_id=args.run_id, target_stage=args.stage, registry_dir=args.registry_dir)
