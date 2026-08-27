@@ -27,14 +27,23 @@ def main():
 
     # ---- TRAIN ----
     train_parser = subparsers.add_parser("train", help="Run model training pipeline")
-    train_parser.add_argument("--config", type=str, required=True, help="Path to training config YAML")
-    train_parser.add_argument("--model", type=str, required=False, default=None, help="Optional model name filter (e.g. lgbm, xgb, rf, linear)")
+    train_parser.add_argument("--config", type=str, default="configs/training/final_train.yaml", help="Path to training config YAML")
+    train_parser.add_argument("--data", type=str, default=None, help="Optional raw dataset path override")
+    train_parser.add_argument("--model", type=str, required=False, default=None, help="Optional model name filter (e.g. lgbm, xgb, rf, linear, stacker)")
     train_parser.add_argument("--seed", type=int, default=42)
 
-    # ---- INFERENCE ----
+    # ---- INFERENCE / PREDICT ----
     infer_parser = subparsers.add_parser("inference", help="Run inference pipeline")
-    infer_parser.add_argument("--config", type=str, required=True, help="Path to inference config YAML")
+    infer_parser.add_argument("--config", type=str, default="configs/inference/inference.yaml", help="Path to inference config YAML")
+    infer_parser.add_argument("--data", type=str, default=None, help="Optional test input CSV dataset path override")
+    infer_parser.add_argument("--output", type=str, default=None, help="Optional predictions output CSV path override")
     infer_parser.add_argument("--model_dir", type=str, required=False, default=None, help="Optional directory containing trained models")
+
+    predict_parser = subparsers.add_parser("predict", help="Run test set prediction pipeline")
+    predict_parser.add_argument("--config", type=str, default="configs/inference/inference.yaml", help="Path to inference config YAML")
+    predict_parser.add_argument("--data", type=str, default=None, help="Path to test CSV dataset")
+    predict_parser.add_argument("--output", type=str, default="submission.csv", help="Output path for submission CSV")
+    predict_parser.add_argument("--model_dir", type=str, required=False, default=None, help="Optional directory containing trained models")
 
     # ---- FEATURE PIPELINE ----
     feat_parser = subparsers.add_parser("features", help="Run feature building pipeline")
@@ -90,17 +99,25 @@ def main():
             logger.info("Raw data already present, skipping DVC pull.")
         
         from src.pipelines.train_pipeline import run_train_pipeline
-        config = load_config(args.config)
+        config_path = args.config if os.path.exists(args.config) else "configs/training/final_train.yaml"
+        config = load_config(config_path)
         validate_config_for_command("train", config)
         train_cfg = flatten_train_config(config)
+        if hasattr(args, "data") and args.data:
+            train_cfg["data_path"] = args.data
         run_train_pipeline(train_cfg, model_name=args.model)
 
-    elif args.command == "inference":
+    elif args.command in ["inference", "predict"]:
         from src.pipelines.inference_pipeline import run_inference_pipeline
-        config = load_config(args.config)
+        config_path = args.config if os.path.exists(args.config) else "configs/inference/inference.yaml"
+        config = load_config(config_path)
         validate_config_for_command("inference", config)
         infer_cfg = config.get("inference", config)
-        if args.model_dir:
+        if hasattr(args, "data") and args.data:
+            infer_cfg["input_path"] = args.data
+        if hasattr(args, "output") and args.output:
+            infer_cfg["output_path"] = args.output
+        if hasattr(args, "model_dir") and args.model_dir:
             infer_cfg["models_dir"] = args.model_dir
         run_inference_pipeline(infer_cfg)
 

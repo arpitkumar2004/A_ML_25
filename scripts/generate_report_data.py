@@ -19,9 +19,13 @@ import time
 import json
 import math
 import argparse
+import warnings
 import numpy as np
 import pandas as pd
 from scipy import stats
+
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 # Add project root to path
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -242,6 +246,7 @@ def benchmark_model_suite(df: pd.DataFrame) -> dict:
     stacker_weights_list = []
 
     for fold, (train_idx, val_idx) in enumerate(kf.split(X_raw)):
+        logger.info(f"  ⚡ [CV Fold {fold+1}/5] Evaluating model suite on {len(train_idx)} train / {len(val_idx)} val samples...")
         X_tr, X_va = X_raw[train_idx], X_raw[val_idx]
         y_tr, y_va = y_log[train_idx], y_log[val_idx]
         y_val_raw = y_raw[val_idx]
@@ -252,13 +257,13 @@ def benchmark_model_suite(df: pd.DataFrame) -> dict:
 
         k_feats = min(128, X_tr_s.shape[1])
         selector = SelectKBest(score_func=f_regression, k=k_feats)
-        X_tr_sel = selector.fit_transform(X_tr_s, y_tr)
-        X_va_sel = selector.transform(X_va_s)
+        X_tr_sel = np.asarray(selector.fit_transform(X_tr_s, y_tr))
+        X_va_sel = np.asarray(selector.transform(X_va_s))
 
         fold_preds = {}
 
         # RandomForest
-        m_rf = RandomForestRegressor(n_estimators=50, max_depth=8, random_state=42)
+        m_rf = RandomForestRegressor(n_estimators=50, max_depth=8, random_state=42, n_jobs=-1)
         m_rf.fit(X_tr_sel, y_tr)
         p_rf_log = m_rf.predict(X_va_sel)
         fold_preds["RandomForest"] = (m_rf.predict(X_tr_sel), p_rf_log)
@@ -266,7 +271,7 @@ def benchmark_model_suite(df: pd.DataFrame) -> dict:
         fold_results["RandomForest"].append(smape(y_val_raw, np.expm1(p_rf_log)))
 
         # ExtraTrees
-        m_et = ExtraTreesRegressor(n_estimators=50, max_depth=8, random_state=42)
+        m_et = ExtraTreesRegressor(n_estimators=50, max_depth=8, random_state=42, n_jobs=-1)
         m_et.fit(X_tr_sel, y_tr)
         p_et_log = m_et.predict(X_va_sel)
         fold_preds["ExtraTrees"] = (m_et.predict(X_tr_sel), p_et_log)
@@ -718,7 +723,7 @@ def analyze_top20_feature_importance(df: pd.DataFrame) -> dict:
     all_names = feature_names + parsed_names
 
     y_log = np.log1p(df["price"].values)
-    rf = RandomForestRegressor(n_estimators=50, random_state=42)
+    rf = RandomForestRegressor(n_estimators=50, random_state=42, n_jobs=-1)
     rf.fit(X_all, y_log)
 
     importances = rf.feature_importances_
@@ -868,7 +873,7 @@ def run_optuna_hpo_study(df: pd.DataFrame, n_trials: int = 15) -> dict:
             if model_type == "RandomForest":
                 n_est = trial.suggest_int("rf_n_estimators", 20, 100, step=20)
                 m_depth = trial.suggest_int("rf_max_depth", 4, 12)
-                model = RandomForestRegressor(n_estimators=n_est, max_depth=m_depth, random_state=42)
+                model = RandomForestRegressor(n_estimators=n_est, max_depth=m_depth, random_state=42, n_jobs=-1)
             elif model_type == "Ridge":
                 alpha = trial.suggest_float("ridge_alpha", 1e-3, 1e2, log=True)
                 model = Ridge(alpha=alpha)
@@ -885,6 +890,7 @@ def run_optuna_hpo_study(df: pd.DataFrame, n_trials: int = 15) -> dict:
                 smapes.append(smape(y_raw[va_idx], p_val))
             
             mean_sm = float(np.mean(smapes))
+            logger.info(f"  🎯 [Optuna Trial {trial.number+1}/{n_trials}] Model={model_type} -> Val SMAPE: {mean_sm:.4f}%")
             trial_history.append({"trial_number": trial.number + 1, "params": trial.params, "val_smape": mean_sm})
             return mean_sm
 
@@ -908,7 +914,7 @@ def run_optuna_hpo_study(df: pd.DataFrame, n_trials: int = 15) -> dict:
             if m_type == "Ridge":
                 m = Ridge(alpha=params["ridge_alpha"])
             elif m_type == "RandomForest":
-                m = RandomForestRegressor(n_estimators=params["rf_n_estimators"], max_depth=params["rf_max_depth"], random_state=42)
+                m = RandomForestRegressor(n_estimators=params["rf_n_estimators"], max_depth=params["rf_max_depth"], random_state=42, n_jobs=-1)
             else:
                 m = GradientBoostingRegressor(n_estimators=params["gb_n_estimators"], learning_rate=params["gb_learning_rate"], max_depth=params["gb_max_depth"], random_state=42)
             
@@ -963,21 +969,25 @@ def main():
     parser.add_argument("--data", type=str, default=None, help="Path to raw CSV dataset")
     args = parser.parse_args()
 
-    ensure_dirs()
-    df = load_dataset(args.data)
+    try:
+        ensure_dirs()
+        df = load_dataset(args.data)
 
-    target_stats   = analyze_target_distribution(df)
-    regex_stats    = analyze_regex_parser(df)
-    model_stats    = benchmark_model_suite(df)
-    ablation_stats = analyze_feature_ablations(df)
-    residual_stats = analyze_actual_vs_predicted_and_tiers(df)
-    scree_stats    = analyze_feature_importance_scree(df)
-    proj_stats     = analyze_embedding_space_projection(df)
-    top_feat_stats = analyze_top20_feature_importance(df)
-    hpo_stats      = run_optuna_hpo_study(df)
-    latency_stats  = benchmark_serving_latency()
+        target_stats   = analyze_target_distribution(df)
+        regex_stats    = analyze_regex_parser(df)
+        model_stats    = benchmark_model_suite(df)
+        ablation_stats = analyze_feature_ablations(df)
+        residual_stats = analyze_actual_vs_predicted_and_tiers(df)
+        scree_stats    = analyze_feature_importance_scree(df)
+        proj_stats     = analyze_embedding_space_projection(df)
+        top_feat_stats = analyze_top20_feature_importance(df)
+        hpo_stats      = run_optuna_hpo_study(df)
+        latency_stats  = benchmark_serving_latency()
 
-    logger.info("Report data and ALL 15 publication figures generated successfully!")
+        logger.info("🎉 Report data and ALL 15 publication figures generated successfully!")
+    except Exception as e:
+        logger.critical(f"❌ FAIL-FIRST: Report generation failed with exception: {e}", exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,36 @@ from typing import Optional
 import logging
 import os
 import sys
+import io
+
+if hasattr(sys.stdout, "buffer") and getattr(sys.stdout, "encoding", "").lower() != "utf-8":
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True)
+    except Exception:
+        pass
+
+if hasattr(sys.stderr, "buffer") and getattr(sys.stderr, "encoding", "").lower() != "utf-8":
+    try:
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace", line_buffering=True)
+    except Exception:
+        pass
+
+
+class UnbufferedStreamHandler(logging.StreamHandler):
+    """StreamHandler that flushes stream after every log emit and safely handles unicode characters."""
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            stream = self.stream
+            try:
+                stream.write(msg + self.terminator)
+            except UnicodeEncodeError:
+                encoding = getattr(stream, "encoding", "utf-8") or "utf-8"
+                safe_msg = msg.encode(encoding, errors="replace").decode(encoding, errors="replace")
+                stream.write(safe_msg + self.terminator)
+            self.flush()
+        except Exception:
+            self.handleError(record)
 
 
 class LoggerFactory:
@@ -21,8 +51,8 @@ class LoggerFactory:
         logger.setLevel(level)
         fmt = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-        # Console handler
-        ch = logging.StreamHandler(stream=sys.stdout)
+        # Console handler with real-time flushing
+        ch = UnbufferedStreamHandler(stream=sys.stdout)
         ch.setLevel(level)
         ch.setFormatter(fmt)
         logger.addHandler(ch)
@@ -30,7 +60,7 @@ class LoggerFactory:
         # File handler
         if log_dir:
             os.makedirs(log_dir, exist_ok=True)
-            fh = logging.FileHandler(os.path.join(log_dir, f"{name}.log"))
+            fh = logging.FileHandler(os.path.join(log_dir, f"{name}.log"), encoding="utf-8", errors="replace")
             fh.setLevel(level)
             fh.setFormatter(fmt)
             logger.addHandler(fh)
@@ -38,6 +68,7 @@ class LoggerFactory:
         # Prevent propagation to root logger twice
         logger.propagate = False
         return logger
+
 
 def get_logger(name: str, log_dir: str = "experiments/logs"):
     os.makedirs(log_dir, exist_ok=True)
@@ -47,11 +78,11 @@ def get_logger(name: str, log_dir: str = "experiments/logs"):
     logger.setLevel(logging.INFO)
 
     # file handler
-    fh = logging.FileHandler(log_file)
+    fh = logging.FileHandler(log_file, encoding="utf-8", errors="replace")
     fh.setLevel(logging.INFO)
 
-    # console handler
-    ch = logging.StreamHandler()
+    # console handler with real-time flushing
+    ch = UnbufferedStreamHandler(stream=sys.stdout)
     ch.setLevel(logging.INFO)
 
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -62,4 +93,7 @@ def get_logger(name: str, log_dir: str = "experiments/logs"):
         logger.addHandler(fh)
         logger.addHandler(ch)
 
+    logger.propagate = False
     return logger
+
+
