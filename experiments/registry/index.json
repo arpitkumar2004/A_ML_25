@@ -891,6 +891,57 @@
       "bundle_path": "experiments/runs/train_20260419T223829Z/bundle",
       "created_utc": "2026-04-19T22:42:51.745855+00:00",
       "updated_utc": "2026-04-19T22:43:02.273349+00:00"
+    },
+    {
+      "run_id": "train_20260827T015659Z",
+      "manifest_path": "experiments\\runs\\train_20260827T015659Z\\bundle\\manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "mlflow": {
+          "enabled": false,
+          "mlflow_run_id": null,
+          "tracking_uri": "",
+          "experiment_name": "A_ML_25_final_training"
+        }
+      },
+      "bundle_path": "experiments\\runs\\train_20260827T015659Z\\bundle",
+      "created_utc": "2026-08-27T01:57:28.419943+00:00",
+      "updated_utc": "2026-08-27T01:57:28.419943+00:00"
+    },
+    {
+      "run_id": "train_20260827T024102Z",
+      "manifest_path": "experiments\\runs\\train_20260827T024102Z\\bundle\\manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "mlflow": {
+          "enabled": false,
+          "mlflow_run_id": null,
+          "tracking_uri": "",
+          "experiment_name": "A_ML_25_final_training"
+        }
+      },
+      "bundle_path": "experiments\\runs\\train_20260827T024102Z\\bundle",
+      "created_utc": "2026-08-27T02:41:22.147967+00:00",
+      "updated_utc": "2026-08-27T02:41:22.147967+00:00"
+    },
+    {
+      "run_id": "train_20260827T024155Z",
+      "manifest_path": "experiments\\runs\\train_20260827T024155Z\\bundle\\manifest.json",
+      "stage": "train",
+      "status": "staging",
+      "tracking": {
+        "mlflow": {
+          "enabled": false,
+          "mlflow_run_id": null,
+          "tracking_uri": "",
+          "experiment_name": "A_ML_25_final_training"
+        }
+      },
+      "bundle_path": "experiments\\runs\\train_20260827T024155Z\\bundle",
+      "created_utc": "2026-08-27T02:42:11.982047+00:00",
+      "updated_utc": "2026-08-27T02:42:11.982047+00:00"
     }
   ],
   "active_production_run_id": "train_20260315T092100Z"

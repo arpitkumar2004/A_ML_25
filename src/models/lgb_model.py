@@ -44,14 +44,22 @@ class LGBModel(BaseModel):
     def fit(self, X, y, eval_set=None):
         try:
             if eval_set:
-                self.model.fit(X, y, eval_set=eval_set, early_stopping_rounds=50, verbose=False)
+                try:
+                    self.model.set_params(early_stopping_rounds=50)
+                    self.model.fit(X, y, eval_set=eval_set)
+                except (TypeError, Exception):
+                    import lightgbm as lgb
+                    self.model.fit(X, y, eval_set=eval_set, callbacks=[lgb.early_stopping(50, verbose=False)])
             else:
                 self.model.fit(X, y)
         except Exception as e:
             logger.warning(f"LightGBM fit failed on primary device ({e}). Retrying with CPU fallback...")
             self.model.set_params(device="cpu", n_jobs=-1)
             if eval_set:
-                self.model.fit(X, y, eval_set=eval_set, early_stopping_rounds=50, verbose=False)
+                try:
+                    self.model.fit(X, y, eval_set=eval_set)
+                except Exception:
+                    self.model.fit(X, y)
             else:
                 self.model.fit(X, y)
 
