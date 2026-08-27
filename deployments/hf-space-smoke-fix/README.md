@@ -10,7 +10,7 @@ license: mit
 
 # AML25
 
-This Space serves the `A_ML_25` FastAPI inference app as a Docker Space.
+This Space serves the `NEURALIS` FastAPI inference app as a Docker Space.
 
 ## Deployed Model
 

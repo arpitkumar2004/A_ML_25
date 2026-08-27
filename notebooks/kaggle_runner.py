@@ -3,7 +3,7 @@
 Kaggle NEURALIS End-to-End Training, Evaluation, and Report Artifact Generator
 ----------------------------------------------------------------------------------
 This script automatically:
-  1. Clones the A_ML_25 GitHub repository (or uses current workspace).
+  1. Clones the NEURALIS GitHub repository (or uses current workspace).
   2. Auto-detects train.csv / test.csv datasets in /kaggle/input/ or local directories.
   3. Normalizes catalog schemas and builds 5 domain pricing feature sets.
   4. Runs 5-fold cross-validation across LightGBM, XGBoost, CatBoost, Random Forest, ExtraTrees, Ridge,
@@ -70,7 +70,7 @@ def find_kaggle_dataset(fail_fast: bool = True):
 
 def run_pipeline():
     print("=========================================================================", flush=True)
-    print("⚡ NEURALIS Kaggle End-to-End ML Pipeline (Real-Time Unbuffered & Fail-Fast)", flush=True)
+    print("NEURALIS Kaggle End-to-End ML Pipeline (Real-Time Unbuffered & Fail-Fast)", flush=True)
     print("=========================================================================", flush=True)
 
     # Prepare environment with PYTHONUNBUFFERED=1 for live stdout streaming

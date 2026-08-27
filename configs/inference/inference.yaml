@@ -33,7 +33,7 @@ inference:
   mlflow:
     enabled: true
     tracking_uri: ""
-    experiment_name: "A_ML_25-inference"
+    experiment_name: "NEURALIS-inference"
     dagshub:
       enabled: false
       repo_owner: ""

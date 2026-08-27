@@ -54,12 +54,12 @@ training:
   mlflow:
     enabled: true
     tracking_uri: ""
-    experiment_name: "A_ML_25_final_training"
+    experiment_name: "NEURALIS_final_training"
     model_registry:
       enabled: true
-      name: "A_ML_25_final_models"
+      name: "NEURALIS_final_models"
     dagshub:
       enabled: true
       repo_owner: "arpitkumar2004"
-      repo_name: "A_ML_25"
+      repo_name: "NEURALIS"
       host: "https://dagshub.com"

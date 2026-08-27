@@ -33,9 +33,9 @@ class LGBModel(BaseModel):
 
         if has_gpu:
             default_params["device"] = "gpu"
-            logger.info("⚡ LGBModel GPU Acceleration Enabled (device='gpu')")
+            logger.info("LGBModel GPU Acceleration Enabled (device='gpu')")
         else:
-            logger.info("ℹ️ LGBModel running in CPU mode.")
+            logger.info("LGBModel running in CPU mode.")
 
         default_params.update(params)
         self.model = LGBMRegressor(**default_params)

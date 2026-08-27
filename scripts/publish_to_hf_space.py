@@ -32,7 +32,7 @@ def publish_to_hf_space(
             token=token,
         )
 
-    commit_message = commit_message or f"Deploy A_ML_25 Space package to {space_repo_id}"
+    commit_message = commit_message or f"Deploy NEURALIS Space package to {space_repo_id}"
     commit_info = api.upload_folder(
         folder_path=str(package_path),
         repo_id=space_repo_id,

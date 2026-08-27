@@ -1,4 +1,8 @@
-const SAMPLE = {
+/* ==========================================================================
+   NEURALIS Senior UI/UX Master Application Controller
+   ========================================================================== */
+
+const SAMPLE_ITEM = {
   sample_id: 1001,
   catalog_content: [
     "Item Name: Log Cabin Sugar Free Syrup, 24 FL OZ (Pack of 12)",
@@ -6,31 +10,125 @@ const SAMPLE = {
     "Bullet Point 2: Indulge in thick, delicious syrup for pancakes, waffles, French toast and more",
     "Bullet Point 3: 90% fewer calories than our original syrup and no sugar or high fructose corn syrup",
     "Bullet Point 4: Amazing syrup that you can feel good about serving to your family and guests",
-    "Bullet Point 5: Stock up on this breakfast staple for decadent pancakes and waffles anytime",
-    "Value: 288.0",
-    "Unit: Fl Oz"
+    "Bullet Point 5: Stock up on this breakfast staple for decadent pancakes and waffles anytime"
   ].join("\n"),
   image_link: "https://m.media-amazon.com/images/I/71QD2OFXqDL.jpg",
-  value: 288.0,
-  unit: "Fl Oz",
-  category: "Breakfast / Pantry",
+  category: "Pantry & Grocery",
   reference_price: 2.195
 };
 
 const node = (id) => document.getElementById(id);
-const money = (value) => value === null || value === undefined || Number.isNaN(Number(value))
+const money = (val) => val === null || val === undefined || Number.isNaN(Number(val))
   ? "--"
-  : Number(value).toLocaleString(undefined, { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 3 });
-const percent = (value) => `${(Number(value || 0) * 100).toFixed(2)}%`;
-const widthPercent = (value) => `${Math.max(0, Math.min(100, Number(value || 0) * 100)).toFixed(1)}%`;
-const clamp01 = (value) => Math.max(0, Math.min(1, Number(value || 0)));
+  : Number(val).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const percent = (val) => `${(Number(val || 0) * 100).toFixed(0)}%`;
 
-let telemetrySnapshot = null;
-let activeTerminalRun = 0;
-let serviceSnapshot = null;
-let currentMode = "viewer";
 let currentPriceValue = null;
+let uploadedImageDataUrl = "";
+let valuationHistory = [];
+let isCalculating = false;
 
+// Initialize Session Valuation History from localStorage
+function initHistory() {
+  try {
+    const saved = localStorage.getItem("neuralis_valuation_history");
+    if (saved) valuationHistory = JSON.parse(saved);
+  } catch (e) {
+    valuationHistory = [];
+  }
+  renderHistoryTable();
+}
+
+function saveValuationHistory(item) {
+  valuationHistory.unshift(item);
+  if (valuationHistory.length > 25) valuationHistory.pop();
+  try {
+    localStorage.setItem("neuralis_valuation_history", JSON.stringify(valuationHistory));
+  } catch (e) {}
+  renderHistoryTable();
+}
+
+function renderHistoryTable() {
+  const tbody = node("historyTableBody");
+  const badge = node("historyCountBadge");
+  if (!tbody || !badge) return;
+  badge.textContent = valuationHistory.length;
+
+  if (valuationHistory.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">No saved valuation history yet. Run a calculation in the workspace!</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = valuationHistory.map((item, idx) => `
+    <tr>
+      <td><small>${item.time}</small></td>
+      <td><strong>${escapeHtml(item.title)}</strong></td>
+      <td><span class="brand-badge">${escapeHtml(item.category)}</span></td>
+      <td><strong style="color: var(--accent-primary)">${money(item.predPrice)}</strong></td>
+      <td>${item.refPrice ? money(item.refPrice) : "--"}</td>
+      <td>${item.confidence}</td>
+      <td>
+        <button type="button" class="btn btn-ghost btn-xs" onclick="reloadHistoryItem(${idx})">Reload</button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function reloadHistoryItem(idx) {
+  const item = valuationHistory[idx];
+  if (!item) return;
+  
+  switchTab("tabValuation");
+  node("catalogContent").value = item.rawContent || "";
+  node("imageUrl").value = item.imageUrl || "";
+  node("categorySelect").value = item.category || "Pantry & Grocery";
+  node("referencePrice").value = item.refPrice || "";
+  uploadedImageDataUrl = item.uploadedImage || "";
+  
+  updateImagePreview();
+  updateCharCount();
+  handleCategoryChange();
+}
+
+window.reloadHistoryItem = reloadHistoryItem;
+
+function clearHistory() {
+  if (confirm("Are you sure you want to clear session valuation history?")) {
+    valuationHistory = [];
+    localStorage.removeItem("neuralis_valuation_history");
+    renderHistoryTable();
+  }
+}
+
+function exportHistoryCSV() {
+  if (valuationHistory.length === 0) {
+    alert("No history records available to export.");
+    return;
+  }
+  const headers = ["Time", "Category", "Estimated Price", "Listed Price", "Confidence", "Description"];
+  const rows = valuationHistory.map(h => [
+    `"${h.time}"`,
+    `"${h.category}"`,
+    h.predPrice,
+    h.refPrice || "",
+    `"${h.confidence}"`,
+    `"${(h.rawContent || "").replace(/"/g, '""')}"`
+  ]);
+  const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `neuralis_valuations_${Date.now()}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function escapeHtml(str) {
+  return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// Price Animated Counter
 function animatePredictionPrice(targetValue) {
   if (targetValue === null || targetValue === undefined || Number.isNaN(Number(targetValue))) {
     currentPriceValue = null;
@@ -40,7 +138,7 @@ function animatePredictionPrice(targetValue) {
 
   const to = Number(targetValue);
   const from = currentPriceValue === null ? Math.max(0, to * 0.85) : currentPriceValue;
-  const durationMs = 540;
+  const durationMs = 600;
   const startTs = performance.now();
 
   function step(now) {
@@ -55,44 +153,164 @@ function animatePredictionPrice(targetValue) {
       node("predictedPrice").textContent = money(to);
     }
   }
-
   window.requestAnimationFrame(step);
 }
 
-function renderConfidence(prediction, canaryMae, imageFallbackActive) {
+// Image Preview Controller
+function updateImagePreview() {
+  const urlInput = (node("imageUrl").value || "").trim();
+  const activeSource = uploadedImageDataUrl || urlInput;
+  const previewImage = node("imagePreview");
+  const previewFallback = node("imageFallback");
+  const removeBtn = node("removeImageBtn");
+
+  if (activeSource) {
+    previewImage.src = activeSource;
+    previewImage.style.display = "block";
+    previewFallback.style.display = "none";
+    if (removeBtn) removeBtn.classList.remove("is-hidden");
+  } else {
+    previewImage.removeAttribute("src");
+    previewImage.style.display = "none";
+    previewFallback.style.display = "flex";
+    if (removeBtn) removeBtn.classList.add("is-hidden");
+  }
+}
+
+function updateCharCount() {
+  const len = (node("catalogContent").value || "").length;
+  if (node("catalogCharCount")) node("catalogCharCount").textContent = `${len} chars`;
+}
+
+function handleCategoryChange() {
+  const selectVal = node("categorySelect").value;
+  const customGroup = node("customCategoryGroup");
+  if (selectVal === "Other") {
+    customGroup.classList.remove("is-hidden");
+  } else {
+    customGroup.classList.add("is-hidden");
+  }
+}
+
+function getSelectedCategory() {
+  const selectVal = node("categorySelect").value;
+  if (selectVal === "Other") {
+    return (node("categoryCustom").value || "").trim() || "General / Other";
+  }
+  return selectVal;
+}
+
+function readForm() {
+  const urlInput = (node("imageUrl").value || "").trim();
+  const imageSource = uploadedImageDataUrl || urlInput;
+  const rawRef = node("referencePrice").value;
+
+  return {
+    catalog_content: (node("catalogContent").value || "").trim(),
+    image_link: imageSource,
+    category: getSelectedCategory(),
+    reference_price: rawRef !== "" && !Number.isNaN(Number(rawRef)) ? Number(rawRef) : null,
+    min_value: Number(node("optMinValue") ? node("optMinValue").value : 0.0),
+    round: node("optRound") ? node("optRound").value === "true" : true
+  };
+}
+
+function buildPayload() {
+  const form = readForm();
+  const record = {
+    sample_id: 1001,
+    catalog_content: form.catalog_content,
+    Description: form.catalog_content,
+    image_link: form.image_link || "",
+    image_path: form.image_link || "",
+    category: form.category
+  };
+
+  if (form.reference_price !== null) {
+    record.price = form.reference_price;
+    record.Price = form.reference_price;
+  }
+
+  return {
+    records: [record],
+    text_col: "catalog_content",
+    image_col: "image_link",
+    id_col: "sample_id",
+    pred_col: "predicted_price",
+    min_value: form.min_value,
+    round: form.round
+  };
+}
+
+// Render Results & Diagnostics
+function renderResults(prediction, reference, trace, canaryMae) {
   if (prediction === null || prediction === undefined || Number.isNaN(Number(prediction))) {
-    node("confidenceBand").textContent = "--";
+    animatePredictionPrice(null);
+    node("predictionMeta").textContent = "Valuation calculation failed.";
+    node("confidenceBand").textContent = "$-- – $--";
     node("confidenceBar").style.width = "0%";
-    node("confidenceNote").textContent = "Run a prediction to estimate uncertainty and reliability.";
+    node("confidenceNote").textContent = "Unable to estimate confidence interval.";
+    node("deltaView").textContent = "--";
+    node("confidenceRatingView").textContent = "--";
+    node("deltaPill").classList.add("is-hidden");
+    if (node("traceCodeBlock")) node("traceCodeBlock").textContent = JSON.stringify(trace || { error: "No trace details available" }, null, 2);
     return;
   }
 
-  const mae = canaryMae === null || canaryMae === undefined || Number.isNaN(Number(canaryMae)) ? 0.035 : Number(canaryMae);
-  let confidence = 0.9 - Math.min(0.42, mae * 2.8);
-  if (imageFallbackActive) confidence -= 0.12;
-  confidence = clamp01(confidence);
+  const predVal = Number(prediction);
+  animatePredictionPrice(predVal);
+  node("predictionMeta").textContent = "Multimodal valuation completed across vision, NLP & stacking ensembler.";
 
-  const spread = Math.max(0.05, (1 - confidence) * 0.22);
-  const center = Number(prediction);
-  const low = Math.max(0, center * (1 - spread));
-  const high = center * (1 + spread);
+  // Reference & Delta Calculation
+  if (reference !== null && !Number.isNaN(reference)) {
+    const delta = predVal - reference;
+    const pct = reference > 0 ? (delta / reference) * 100 : 0;
+    const sign = delta >= 0 ? "+" : "";
+    const deltaText = `${sign}${money(delta)} (${sign}${pct.toFixed(1)}%)`;
 
-  node("confidenceBand").textContent = `${money(low)} to ${money(high)}`;
-  node("confidenceBar").style.width = `${(confidence * 100).toFixed(1)}%`;
-  node("confidenceNote").textContent = imageFallbackActive
-    ? "Image fallback was used, so uncertainty is wider for this run."
-    : confidence >= 0.75
-      ? "High-confidence prediction based on aligned multimodal signals."
-      : "Moderate confidence. Use reference delta and diagnostics for review.";
-}
+    node("referenceView").textContent = money(reference);
+    node("deltaView").textContent = deltaText;
 
-function renderDrivers(trace) {
+    const deltaPill = node("deltaPill");
+    deltaPill.textContent = `${sign}${money(delta)} vs Listed`;
+    deltaPill.className = `delta-pill ${delta >= 0 ? "positive" : "negative"}`;
+    deltaPill.classList.remove("is-hidden");
+  } else {
+    node("referenceView").textContent = "--";
+    node("deltaView").textContent = "--";
+    node("deltaPill").classList.add("is-hidden");
+  }
+
+  // Confidence Band
+  const mae = canaryMae === null || canaryMae === undefined || Number.isNaN(Number(canaryMae)) ? 0.04 : Number(canaryMae);
   const fx = trace.feature_extraction || {};
+  const imageFallbackActive = Number(fx.image && fx.image.zero_rows || 0) > 0;
+
+  let confidenceScore = 0.92 - Math.min(0.35, mae * 2.5);
+  if (imageFallbackActive) confidenceScore -= 0.15;
+  confidenceScore = Math.max(0.35, Math.min(0.98, confidenceScore));
+
+  const spread = Math.max(0.06, (1 - confidenceScore) * 0.24);
+  const lowRange = Math.max(0, predVal * (1 - spread));
+  const highRange = predVal * (1 + spread);
+
+  node("confidenceBand").textContent = `${money(lowRange)} – ${money(highRange)}`;
+  node("confidenceBar").style.width = `${(confidenceScore * 100).toFixed(0)}%`;
+
+  const ratingText = confidenceScore >= 0.8 ? "High" : confidenceScore >= 0.6 ? "Moderate" : "Low";
+  node("confidenceRatingView").textContent = `${ratingText} (${(confidenceScore * 100).toFixed(0)}%)`;
+
+  node("confidenceNote").textContent = imageFallbackActive
+    ? "Visual fallback applied for missing image. Estimated price range is slightly wider."
+    : confidenceScore >= 0.8
+      ? "High confidence valuation based on rich text & visual alignment."
+      : "Moderate confidence valuation based on extracted signals.";
+
+  // Drivers Breakdown
   const textDims = Number(fx.text && fx.text.dimensions || 0);
   const imageDims = Number(fx.image && fx.image.dimensions || 0);
   const numericDims = Number(fx.numeric && fx.numeric.dimensions || 0);
   const total = Math.max(1, textDims + imageDims + numericDims);
-  const imageFallbackActive = Number(fx.image && fx.image.zero_rows || 0) > 0;
 
   const textShare = textDims / total;
   const imageShare = imageDims / total;
@@ -102,395 +320,336 @@ function renderDrivers(trace) {
   node("imageDriver").textContent = percent(imageShare);
   node("numericDriver").textContent = percent(numericShare);
 
-  node("textDriverNote").textContent = textDims > 0 ? `${textDims} text embedding dimensions active.` : "No text dimensions detected.";
-  node("imageDriverNote").textContent = imageFallbackActive
-    ? "Image fallback active for this run."
-    : imageDims > 0
-      ? `${imageDims} image embedding dimensions active.`
-      : "No image dimensions detected.";
-  node("numericDriverNote").textContent = numericDims > 0 ? `${numericDims} numeric features active.` : "No numeric features detected.";
+  node("textDriverBar").style.width = `${(textShare * 100).toFixed(0)}%`;
+  node("imageDriverBar").style.width = `${(imageShare * 100).toFixed(0)}%`;
+  node("numericDriverBar").style.width = `${(numericShare * 100).toFixed(0)}%`;
+
+  node("textDriverNote").textContent = textDims > 0 ? `${textDims} active NLP features` : "Standard text signals";
+  node("imageDriverNote").textContent = imageFallbackActive ? "Image fallback used" : imageDims > 0 ? `${imageDims} visual features` : "No image signals";
+  node("numericDriverNote").textContent = numericDims > 0 ? `${numericDims} quantity features` : "Standard quantity signals";
+
+  // Diagnostics Code Block
+  if (node("traceCodeBlock")) node("traceCodeBlock").textContent = JSON.stringify(trace, null, 2);
+
+  // Save Valuation Record to Session History
+  const form = readForm();
+  saveValuationHistory({
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    title: (form.catalog_content.split("\n")[0] || "Product Item").substring(0, 45),
+    category: form.category,
+    predPrice: predVal,
+    refPrice: reference,
+    confidence: `${ratingText} (${(confidenceScore * 100).toFixed(0)}%)`,
+    rawContent: form.catalog_content,
+    imageUrl: node("imageUrl").value,
+    uploadedImage: uploadedImageDataUrl
+  });
 }
 
-function resetRunInsights() {
-  node("confidenceBand").textContent = "--";
+function resetForm() {
+  node("catalogContent").value = "";
+  node("imageUrl").value = "";
+  uploadedImageDataUrl = "";
+  node("categorySelect").value = "Pantry & Grocery";
+  node("categoryCustom").value = "";
+  node("referencePrice").value = "";
+  updateCharCount();
+  handleCategoryChange();
+  updateImagePreview();
+
+  animatePredictionPrice(null);
+  node("predictionMeta").textContent = "Enter catalog content on the left and click 'Calculate Valuation'.";
+  node("confidenceBand").textContent = "$-- – $--";
   node("confidenceBar").style.width = "0%";
-  node("confidenceNote").textContent = "Run a prediction to estimate uncertainty and reliability.";
-  node("textDriver").textContent = "--";
-  node("imageDriver").textContent = "--";
-  node("numericDriver").textContent = "--";
-  node("textDriverNote").textContent = "Waiting for prediction.";
-  node("imageDriverNote").textContent = "Waiting for prediction.";
-  node("numericDriverNote").textContent = "Waiting for prediction.";
-}
+  node("confidenceNote").textContent = "Valuation confidence score updates automatically upon pipeline completion.";
+  node("referenceView").textContent = "--";
+  node("deltaView").textContent = "--";
+  node("confidenceRatingView").textContent = "--";
+  node("deltaPill").classList.add("is-hidden");
 
-function setMode(mode) {
-  currentMode = mode === "engineer" ? "engineer" : "viewer";
-  document.body.classList.toggle("viewer-mode", currentMode === "viewer");
-  node("viewerModeBtn").classList.toggle("is-active", currentMode === "viewer");
-  node("engineerModeBtn").classList.toggle("is-active", currentMode === "engineer");
-  node("viewerModeBtn").setAttribute("aria-selected", String(currentMode === "viewer"));
-  node("engineerModeBtn").setAttribute("aria-selected", String(currentMode === "engineer"));
-}
-
-function readForm() {
-  const brokenToggle = node("simulateBroken").checked;
-  const rawImage = (node("imageUrl").value || "").trim();
-  return {
-    sample_id: Number(node("sampleId").value || "1"),
-    catalog_content: (node("catalogContent").value || "").trim(),
-    image_link: brokenToggle ? "https://invalid.example.com/broken-image.jpg" : rawImage,
-    value: node("numericValue").value,
-    unit: (node("unitText").value || "").trim(),
-    category: (node("categoryText").value || "").trim(),
-    reference_price: node("referencePrice").value,
-    round: true
-  };
-}
-
-function buildPayload() {
-  const form = readForm();
-  const record = {
-    sample_id: form.sample_id,
-    catalog_content: form.catalog_content,
-    Description: form.catalog_content,
-    image_link: form.image_link,
-    image_path: form.image_link
-  };
-
-  if (form.value !== "") record.value = Number(form.value);
-  if (form.unit) record.unit = form.unit;
-  if (form.category) record.category = form.category;
-  if (form.reference_price !== "") {
-    const ref = Number(form.reference_price);
-    if (!Number.isNaN(ref)) {
-      record.price = ref;
-      record.Price = ref;
-    }
-  }
-
-  return {
-    records: [record],
-    text_col: "catalog_content",
-    image_col: "image_link",
-    id_col: "sample_id",
-    pred_col: "predicted_price",
-    min_value: 0.0,
-    round: form.round
-  };
-}
-
-function syncPreview() {
-  const form = readForm();
-  node("payloadPreview").textContent = JSON.stringify(buildPayload(), null, 2);
-  node("referenceView").textContent = form.reference_price !== "" ? money(Number(form.reference_price)) : "--";
-
-  const previewImage = node("imagePreview");
-  const previewFallback = node("imageFallback");
-  if (form.image_link) {
-    previewImage.src = form.image_link;
-    previewImage.style.display = "block";
-    previewFallback.style.display = "none";
-  } else {
-    previewImage.removeAttribute("src");
-    previewImage.style.display = "none";
-    previewFallback.style.display = "block";
-  }
+  ["textDriver", "imageDriver", "numericDriver"].forEach((id) => node(id).textContent = "--");
+  ["textDriverBar", "imageDriverBar", "numericDriverBar"].forEach((id) => node(id).style.width = "0%");
+  node("textDriverNote").textContent = "Awaiting calculation";
+  node("imageDriverNote").textContent = "Awaiting calculation";
+  node("numericDriverNote").textContent = "Awaiting calculation";
+  if (node("traceCodeBlock")) node("traceCodeBlock").textContent = "Run a valuation to inspect pipeline diagnostics JSON...";
 }
 
 function loadSample() {
-  node("sampleId").value = SAMPLE.sample_id;
-  node("catalogContent").value = SAMPLE.catalog_content;
-  node("imageUrl").value = SAMPLE.image_link;
-  node("numericValue").value = SAMPLE.value;
-  node("unitText").value = SAMPLE.unit;
-  node("categoryText").value = SAMPLE.category;
-  node("referencePrice").value = SAMPLE.reference_price;
-  node("simulateBroken").checked = false;
-  syncPreview();
+  resetForm();
+  node("catalogContent").value = SAMPLE_ITEM.catalog_content;
+  node("imageUrl").value = SAMPLE_ITEM.image_link;
+  node("categorySelect").value = SAMPLE_ITEM.category;
+  node("referencePrice").value = SAMPLE_ITEM.reference_price;
+  updateCharCount();
+  handleCategoryChange();
+  updateImagePreview();
 }
 
-function setStatus(isHealthy, label) {
-  const statusDot = node("statusDot");
-  statusDot.className = `status-dot ${isHealthy ? "ok" : "err"}`;
-  node("apiStatusText").textContent = `Status: ${label}`;
-}
-
-function setLink(id, href, fallback) {
-  node(id).href = href || fallback;
-}
-
-function renderServiceInfo(service) {
-  if (!service) return;
-  serviceSnapshot = service;
-  setStatus(Boolean(service.ready), service.ready ? "Healthy" : "Degraded");
-  node("activeRunId").textContent = service.run_id || "unknown";
-  node("environmentTag").textContent = service.environment || "PRODUCTION";
-  node("heroRun").textContent = service.run_id || "unknown";
-  node("heroHealth").textContent = service.ready ? "Healthy" : "Degraded";
-  node("reliabilityHealth").textContent = service.ready ? "Healthy" : "Degraded";
-  node("serviceSnapshotBox").textContent = JSON.stringify(service, null, 2);
-
-  const links = service.links || {};
-  setLink("bundleLink", links.github_repo, "https://github.com/arpitkumar2004/A_ML_25");
-  setLink("mlflowLink", links.mlflow_run, links.github_repo || "https://github.com/arpitkumar2004/A_ML_25");
-  setLink("manifestLink", "/service/info", "/service/info");
-}
-
-function renderTelemetry(metrics) {
-  telemetrySnapshot = metrics;
-  const fallback = metrics.fallback || {};
-  const dataQuality = metrics.data_quality || {};
-  const fallbackRate = Math.max(Number(fallback.image_rate || 0), Number(fallback.text_rate || 0));
-
-  node("p95Latency").textContent = `${Math.round(Number(metrics.latency_ms && metrics.latency_ms.p95 || 0))} ms`;
-  node("heroLatency").textContent = node("p95Latency").textContent;
-  node("requestsCount").textContent = Number(metrics.request_count || 0).toLocaleString();
-  node("errorRate").textContent = percent(metrics.error_rate || 0);
-  node("fallbackRate").textContent = percent(fallbackRate);
-  node("dqPassRate").textContent = percent(dataQuality.pass_rate || 0);
-  node("heroFallback").textContent = fallbackRate > 0 ? "Fallback observed" : "No fallback observed";
-  node("reliabilityFallback").textContent = fallbackRate > 0 ? "Observed" : "None observed";
-  node("reliabilityError").textContent = node("errorRate").textContent;
-  node("reliabilityDQ").textContent = node("dqPassRate").textContent;
-
-  node("imageFallbackBar").style.width = widthPercent(fallback.image_rate || 0);
-  node("textFallbackBar").style.width = widthPercent(fallback.text_rate || 0);
-  node("errorRateBar").style.width = widthPercent(metrics.error_rate || 0);
-  node("dqPassBar").style.width = widthPercent(dataQuality.pass_rate || 0);
-}
-
-async function pollSystem() {
-  try {
-    const [healthRes, infoRes, metricsRes] = await Promise.all([
-      fetch("/healthz"),
-      fetch("/service/info"),
-      fetch("/metrics/json")
-    ]);
-
-    const health = await healthRes.json();
-    const info = await infoRes.json();
-    const metrics = await metricsRes.json();
-
-    renderServiceInfo(info);
-    renderTelemetry(metrics);
-    if (!healthRes.ok || !info.ready) {
-      setStatus(false, "Degraded");
-    }
-  } catch (error) {
-    setStatus(false, "Unreachable");
-  }
-}
-
-function pushTerminalLine(runId, seconds, text, kind = "") {
-  if (runId !== activeTerminalRun) return;
-  const line = document.createElement("div");
-  line.className = `terminal-line${kind ? ` ${kind}` : ""}`;
-  line.textContent = `[${seconds}] ${text}`;
-  node("terminalBody").appendChild(line);
-  node("terminalBody").scrollTop = node("terminalBody").scrollHeight;
-}
-
-function startTerminal(runId) {
-  node("terminalPanel").classList.remove("is-hidden");
-  node("terminalBody").innerHTML = "";
-  node("terminalStatus").textContent = "Execution in progress";
+async function runValuation() {
+  if (isCalculating) return;
   const form = readForm();
-  const steps = [
-    ["0.01s", "Request ID generated and middleware engaged."],
-    ["0.05s", "Schema normalized and alias columns matched."],
-    ["0.12s", "Extracting parsed numeric signals from text."],
-    ["0.45s", "Generating text embeddings for serving payload."],
-    ["0.82s", form.image_link ? "Resolving image input and checking fallback safety." : "Image input missing. Zero-vector fallback path available."],
-    ["1.12s", "Executing base models (LGBM, XGB, RF)."],
-    ["1.30s", "Awaiting ensemble stacker output."]
-  ];
-  steps.forEach(([seconds, text], index) => {
-    window.setTimeout(() => pushTerminalLine(runId, seconds, text), index * 170);
-  });
-}
 
-function fillTable(targetId, rows) {
-  const table = node(targetId);
-  if (!rows.length) {
-    table.innerHTML = '<div class="table-row"><span>No details available yet.</span><strong>--</strong></div>';
+  if (!form.catalog_content) {
+    node("catalogContent").focus();
+    node("predictionMeta").textContent = "Please provide a catalog description before calculating.";
     return;
   }
-  table.innerHTML = rows.map((row) => `<div class="table-row"><span>${row.label}</span><strong>${row.value}</strong></div>`).join("");
-}
 
-function renderTabs(trace) {
-  const schema = trace.schema_alignment || {};
-  const ensemble = trace.ensemble || {};
-  const parsed = trace.parsed_signals || {};
-  const matrix = trace.feature_matrix || {};
-  const fx = trace.feature_extraction || {};
-  const textDims = Number(fx.text && fx.text.dimensions || 0);
-  const imageDims = Number(fx.image && fx.image.dimensions || 0);
-  const numericDims = Number(fx.numeric && fx.numeric.dimensions || 0);
-  const featureWidth = textDims + imageDims + numericDims;
-  const renameEntries = Object.entries(schema.rename_map || {});
+  isCalculating = true;
+  const runBtn = node("runBtn");
+  const runBtnText = node("runBtnText");
+  const progressCard = node("pipelineProgressCard");
 
-  const ensembleRows = Object.entries(ensemble.base_model_outputs || {}).map(([name, value]) => ({
-    label: name,
-    value: money(value)
-  }));
-  ensembleRows.push({
-    label: ensemble.stacker_enabled ? "Stacker Output" : "Ensemble Mean",
-    value: money(ensemble.final_prediction)
-  });
-  fillTable("ensembleTable", ensembleRows);
+  runBtn.disabled = true;
+  if (runBtnText) runBtnText.textContent = "Calculating...";
+  if (progressCard) progressCard.classList.remove("is-hidden");
 
-  fillTable("schemaTable", [
-    { label: "Rename Map", value: renameEntries.length ? renameEntries.map(([from, to]) => `${from} -> ${to}`).join(", ") : "Already canonical" },
-    { label: "Resolved Text Column", value: schema.resolved_text_col || "catalog_content" },
-    { label: "Resolved Image Column", value: schema.resolved_image_col || "image_link" },
-    { label: "Original Columns", value: (schema.original_columns || []).join(", ") || "--" },
-    { label: "Normalized Columns", value: (schema.normalized_columns || []).join(", ") || "--" },
-    { label: "Raw Feature Matrix", value: Array.isArray(matrix.raw_shape) ? `(${matrix.raw_shape.join(", ")})` : "--" },
-    { label: "Final Feature Matrix", value: Array.isArray(matrix.final_shape) ? `(${matrix.final_shape.join(", ")})` : "--" },
-    { label: "Feature Selection", value: matrix.selection && matrix.selection.applied ? "applied" : "not applied" },
-    { label: "Post Log Transform", value: matrix.post_log_transform && matrix.post_log_transform.applied ? "applied" : "not applied" }
-  ]);
+  // Step 1 Animation
+  const stepText = node("stepText");
+  const stepVision = node("stepVision");
+  const stepEnsemble = node("stepEnsemble");
 
-  fillTable("parsedTable", [
-    { label: "parsed_value", value: `${parsed.parsed_value ?? 0}` },
-    { label: "parsed_unit", value: parsed.parsed_unit || "none" },
-    { label: "parsed_ounces", value: `${parsed.parsed_ounces ?? 0}` },
-    { label: "parsed_quantity_mentions", value: `${parsed.quantity_mentions ?? 0}` },
-    { label: "parsed_total_weight_g", value: `${parsed.total_weight_g ?? 0}` },
-    { label: "parsed_total_volume_ml", value: `${parsed.total_volume_ml ?? 0}` },
-    { label: "parsed_total_count_units", value: `${parsed.total_count_units ?? 0}` },
-    { label: "text_blank_rows", value: `${fx.text && fx.text.blank_rows || 0}` },
-    { label: "image_backend", value: fx.image && (fx.image.model_name || fx.image.backend) || "n/a" },
-    { label: "numeric_columns", value: fx.numeric && (fx.numeric.columns || []).join(", ") || "--" }
-  ]);
-
-  node("schemaView").textContent = "sample_id, catalog_content, image_link";
-  node("featureShapeView").textContent = `(1, ${featureWidth || "--"})`;
-  node("schemaSummary").textContent = renameEntries.length ? "aliases remapped" : "already canonical";
-  node("featureWidthView").textContent = featureWidth || "--";
-  node("modelCountView").textContent = `${ensemble.base_model_count || 0} models`;
-  node("fallbackStateView").textContent = Number(fx.image && fx.image.zero_rows || 0) > 0 ? "image fallback active" : "no image fallback";
-  node("heroFallback").textContent = Number(fx.image && fx.image.zero_rows || 0) > 0 ? "Fallback active" : "No fallback in run";
-  node("reliabilityFallback").textContent = Number(fx.image && fx.image.zero_rows || 0) > 0 ? "Image fallback active" : "No fallback in run";
-  node("rawTraceBox").textContent = JSON.stringify(trace, null, 2);
-  renderDrivers(trace);
-}
-
-function selectTab(name) {
-  document.querySelectorAll(".tab").forEach((tab) => {
-    tab.classList.toggle("is-active", tab.dataset.tab === name);
-  });
-  document.querySelectorAll(".tab-panel").forEach((panel) => {
-    panel.classList.toggle("is-active", panel.dataset.panel === name);
-  });
-}
-
-async function runInference() {
-  const runId = Date.now();
-  activeTerminalRun = runId;
-  startTerminal(runId);
-  node("predictionMeta").textContent = "Serving pipeline executing. Terminal trace is live.";
-  animatePredictionPrice(null);
-  node("variantView").textContent = "--";
-  node("canaryView").textContent = "--";
-  node("deltaView").textContent = "--";
-  node("schemaSummary").textContent = "processing";
-  node("featureWidthView").textContent = "--";
-  node("modelCountView").textContent = "--";
-  node("fallbackStateView").textContent = "pending";
-  node("heroFallback").textContent = "Processing";
-  node("reliabilityFallback").textContent = "Processing";
-  node("rawTraceBox").textContent = "Diagnostics will appear after the model responds.";
-  resetRunInsights();
-  if (serviceSnapshot) {
-    node("serviceSnapshotBox").textContent = JSON.stringify(serviceSnapshot, null, 2);
-  }
-  selectTab("schema");
+  if (stepText) stepText.className = "step-item active";
+  if (stepVision) stepVision.className = "step-item";
+  if (stepEnsemble) stepEnsemble.className = "step-item";
 
   try {
+    await new Promise(r => setTimeout(r, 200));
+    if (stepText) stepText.className = "step-item done";
+    if (stepVision) stepVision.className = "step-item active";
+
     const response = await fetch("/v1/predict", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(buildPayload())
     });
+
+    if (stepVision) stepVision.className = "step-item done";
+    if (stepEnsemble) stepEnsemble.className = "step-item active";
+
     const data = await response.json();
-    const requestId = response.headers.get("x-request-id") || "n/a";
-    pushTerminalLine(runId, "1.42s", `Request ID confirmed: ${requestId}.`);
+    await new Promise(r => setTimeout(r, 200));
+    if (stepEnsemble) stepEnsemble.className = "step-item done";
 
     if (!response.ok) {
-      pushTerminalLine(runId, "1.45s", `Serving pipeline failed: ${JSON.stringify(data.detail || data)}`, "bad");
-      node("predictionMeta").textContent = `Execution failed (${response.status}).`;
-      fillTable("ensembleTable", []);
-      fillTable("parsedTable", []);
+      node("predictionMeta").textContent = `Server Error: ${data.detail || "Unable to compute valuation."}`;
+      renderResults(null, null, data, null);
       return;
     }
 
-    const trace = data.trace || {};
-    const imageZeroRows = Number(trace.feature_extraction && trace.feature_extraction.image && trace.feature_extraction.image.zero_rows || 0);
-    if (imageZeroRows > 0) {
-      pushTerminalLine(runId, "0.85s", "Image URL failed -> Zero-vector fallback applied safely.", "warn");
-    } else {
-      pushTerminalLine(runId, "0.85s", "Image embedding step completed without fallback.");
-    }
-    pushTerminalLine(runId, "1.30s", "Stacker ensemble complete. Returning prediction.");
-
     const prediction = data.predictions && data.predictions[0] ? data.predictions[0].predicted_price : null;
-    const reference = readForm().reference_price === "" ? null : Number(readForm().reference_price);
-    const delta = prediction === null || reference === null || Number.isNaN(reference) ? null : Number(prediction) - reference;
+    const trace = data.trace || {};
+    renderResults(prediction, form.reference_price, trace, data.canary_divergence_mae);
 
-    animatePredictionPrice(prediction);
-    node("predictionMeta").textContent = `Pipeline complete. Active model path: ${data.model_variant || "primary"}.`;
-    node("variantView").textContent = data.model_variant || "--";
-    node("canaryView").textContent = data.canary_divergence_mae === null || data.canary_divergence_mae === undefined ? "--" : Number(data.canary_divergence_mae).toFixed(4);
-    node("deltaView").textContent = delta === null ? "--" : `${delta >= 0 ? "+" : ""}${delta.toFixed(3)}`;
-    renderConfidence(prediction, data.canary_divergence_mae, imageZeroRows > 0);
-    renderTabs(trace);
-
-    await pollSystem();
-  } catch (error) {
-    pushTerminalLine(runId, "1.45s", `Network or runtime error: ${String(error)}`, "bad");
-    node("predictionMeta").textContent = "Execution could not complete.";
+  } catch (err) {
+    node("predictionMeta").textContent = "Network Error: Could not connect to the FastAPI valuation server.";
+    renderResults(null, null, {}, null);
   } finally {
-    node("terminalStatus").textContent = "Execution finished";
+    isCalculating = false;
+    runBtn.disabled = false;
+    if (runBtnText) runBtnText.textContent = "Calculate Valuation";
+    if (progressCard) setTimeout(() => progressCard.classList.add("is-hidden"), 1000);
   }
 }
 
-function scrollToInputAndRun() {
-  document.querySelector(".left-pane")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  window.setTimeout(() => runInference(), 240);
+// Copy Valuation Summary
+function copyValuationSummary() {
+  const price = node("predictedPrice").textContent;
+  const band = node("confidenceBand").textContent;
+  const delta = node("deltaView").textContent;
+  const desc = node("catalogContent").value.substring(0, 100);
+
+  const summary = `NEURALIS Valuation Summary:\nEstimated Market Price: ${price}\nConfidence Band (95%): ${band}\nDelta vs Listed: ${delta}\nProduct: ${desc}...`;
+  navigator.clipboard.writeText(summary).then(() => {
+    alert("Valuation summary copied to clipboard!");
+  }).catch(() => {
+    alert(summary);
+  });
 }
 
-node("sampleBtn").addEventListener("click", loadSample);
-node("runBtn").addEventListener("click", runInference);
-node("mobileRunBtn").addEventListener("click", runInference);
-node("viewerModeBtn").addEventListener("click", () => setMode("viewer"));
-node("engineerModeBtn").addEventListener("click", () => setMode("engineer"));
-node("tryDemoBtn").addEventListener("click", scrollToInputAndRun);
-node("openArchBtn").addEventListener("click", () => {
-  document.getElementById("architecturePanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
-});
-node("simulateBroken").addEventListener("change", syncPreview);
-node("imagePreview").addEventListener("error", () => {
-  node("imagePreview").style.display = "none";
-  node("imageFallback").style.display = "block";
+// Tab Switching System
+function switchTab(tabId) {
+  const tabs = ["tabValuation", "tabTelemetry", "tabHistory"];
+  const panels = ["viewValuation", "viewTelemetry", "viewHistory"];
+
+  tabs.forEach((tId, idx) => {
+    const tabEl = node(tId);
+    const panelEl = node(panels[idx]);
+    if (!tabEl || !panelEl) return;
+    if (tId === tabId) {
+      tabEl.classList.add("active");
+      tabEl.setAttribute("aria-selected", "true");
+      panelEl.classList.add("active");
+    } else {
+      tabEl.classList.remove("active");
+      tabEl.setAttribute("aria-selected", "false");
+      panelEl.classList.remove("active");
+    }
+  });
+
+  if (tabId === "tabTelemetry") pollTelemetry();
+}
+
+// File Dropzone Handler
+function initFileDropzone() {
+  const dropzone = node("dropzone");
+  const fileInput = node("imageFileInput");
+  const browseBtn = node("browseFilesBtn");
+  if (!dropzone || !fileInput || !browseBtn) return;
+
+  browseBtn.addEventListener("click", () => fileInput.click());
+
+  fileInput.addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) processImageFile(file);
+  });
+
+  ['dragenter', 'dragover'].forEach(eventName => {
+    dropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add('is-dragover');
+    }, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    dropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('is-dragover');
+    }, false);
+  });
+
+  dropzone.addEventListener('drop', (e) => {
+    const dt = e.dataTransfer;
+    const file = dt.files && dt.files[0];
+    if (file) processImageFile(file);
+  });
+}
+
+function processImageFile(file) {
+  if (!file.type.startsWith('image/')) {
+    alert('Please select a valid image file (PNG, JPG, WEBP).');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    uploadedImageDataUrl = e.target.result;
+    node("imageUrl").value = "";
+    updateImagePreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+// Accordion Toggles
+function initAccordions() {
+  const setupAccordion = (toggleId, bodyId) => {
+    const toggle = node(toggleId);
+    const body = node(bodyId);
+    if (!toggle || !body) return;
+
+    toggle.addEventListener("click", () => {
+      const expanded = toggle.getAttribute("aria-expanded") === "true";
+      toggle.setAttribute("aria-expanded", !expanded);
+      if (expanded) {
+        body.classList.add("is-hidden");
+      } else {
+        body.classList.remove("is-hidden");
+      }
+    });
+  };
+
+  setupAccordion("accordionToggle", "accordionBody");
+  setupAccordion("traceToggle", "traceBody");
+}
+
+// Telemetry & Health Polling
+async function pollHealth() {
+  const statusDot = node("statusDot");
+  const statusText = node("apiStatusText");
+  if (!statusDot || !statusText) return;
+  try {
+    const res = await fetch("/healthz");
+    if (res.ok) {
+      statusDot.className = "status-dot ok";
+      statusText.textContent = "Status: Online";
+    } else {
+      statusDot.className = "status-dot warning";
+      statusText.textContent = "Status: Degraded";
+    }
+  } catch (e) {
+    statusDot.className = "status-dot err";
+    statusText.textContent = "Status: Offline";
+  }
+}
+
+async function pollTelemetry() {
+  try {
+    const res = await fetch("/metrics/json");
+    if (!res.ok) return;
+    const data = await res.json();
+
+    if (node("telRequestCount")) node("telRequestCount").textContent = (data.request_count || 0).toLocaleString();
+    if (node("telP50")) node("telP50").textContent = `${(data.latency_ms?.p50 || 0).toFixed(1)} ms`;
+    if (node("telP95")) node("telP95").textContent = `${(data.latency_ms?.p95 || 0).toFixed(1)} ms`;
+    if (node("telErrorRate")) node("telErrorRate").textContent = `${((data.error_rate || 0) * 100).toFixed(1)}%`;
+
+    const s = data.service || {};
+    if (node("telRunId")) node("telRunId").textContent = s.run_id || "Legacy Bundle";
+    if (node("telBundlePath")) node("telBundlePath").textContent = s.bundle_path || "Default Path";
+    if (node("telEnvStage")) node("telEnvStage").textContent = s.environment || "PRODUCTION";
+
+    if (s.links?.github_repo && node("linkGithub")) node("linkGithub").href = s.links.github_repo;
+    if (s.links?.dagshub_repo && node("linkDagshub")) node("linkDagshub").href = s.links.dagshub_repo;
+  } catch (e) {}
+}
+
+// Keyboard Shortcut Listeners
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+    e.preventDefault();
+    runValuation();
+  } else if (e.key === "Escape") {
+    resetForm();
+  } else if (e.altKey && (e.key === "s" || e.key === "S")) {
+    e.preventDefault();
+    loadSample();
+  }
 });
 
-["catalogContent", "imageUrl", "sampleId", "numericValue", "unitText", "categoryText", "referencePrice"].forEach((id) => {
-  node(id).addEventListener("input", syncPreview);
+// Event Binding
+if (node("tabValuation")) node("tabValuation").addEventListener("click", () => switchTab("tabValuation"));
+if (node("tabTelemetry")) node("tabTelemetry").addEventListener("click", () => switchTab("tabTelemetry"));
+if (node("tabHistory")) node("tabHistory").addEventListener("click", () => switchTab("tabHistory"));
+
+if (node("sampleBtn")) node("sampleBtn").addEventListener("click", loadSample);
+if (node("runBtn")) node("runBtn").addEventListener("click", runValuation);
+if (node("resetFormBtn")) node("resetFormBtn").addEventListener("click", resetForm);
+if (node("copySummaryBtn")) node("copySummaryBtn").addEventListener("click", copyValuationSummary);
+if (node("exportHistoryBtn")) node("exportHistoryBtn").addEventListener("click", exportHistoryCSV);
+if (node("clearHistoryBtn")) node("clearHistoryBtn").addEventListener("click", clearHistory);
+
+if (node("catalogContent")) node("catalogContent").addEventListener("input", updateCharCount);
+if (node("categorySelect")) node("categorySelect").addEventListener("change", handleCategoryChange);
+if (node("imageUrl")) node("imageUrl").addEventListener("input", () => {
+  uploadedImageDataUrl = "";
+  updateImagePreview();
 });
 
-document.querySelectorAll(".tab").forEach((tab) => {
-  tab.addEventListener("click", () => selectTab(tab.dataset.tab));
-});
+if (node("removeImageBtn")) {
+  node("removeImageBtn").addEventListener("click", () => {
+    uploadedImageDataUrl = "";
+    node("imageUrl").value = "";
+    updateImagePreview();
+  });
+}
 
-loadSample();
-setMode("viewer");
-resetRunInsights();
-node("rawTraceBox").textContent = "Diagnostics will appear after the model responds.";
-node("serviceSnapshotBox").textContent = "Service snapshot will appear after polling /service/info.";
-fillTable("ensembleTable", []);
-fillTable("schemaTable", []);
-fillTable("parsedTable", []);
-pollSystem();
-window.setInterval(pollSystem, 5000);
+// App Startup Initialization
+initFileDropzone();
+initAccordions();
+initHistory();
+resetForm();
+pollHealth();
+window.setInterval(pollHealth, 10000);
+

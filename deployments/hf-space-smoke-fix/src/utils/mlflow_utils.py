@@ -57,7 +57,7 @@ class MLflowTracker:
         dagshub_cfg = mlflow_cfg.get("dagshub", {}) if isinstance(mlflow_cfg.get("dagshub", {}), dict) else {}
 
         self.tracking_uri = mlflow_cfg.get("tracking_uri") or os.getenv("MLFLOW_TRACKING_URI") or ""
-        self.experiment_name = mlflow_cfg.get("experiment_name") or os.getenv("MLFLOW_EXPERIMENT_NAME") or "A_ML_25"
+        self.experiment_name = mlflow_cfg.get("experiment_name") or os.getenv("MLFLOW_EXPERIMENT_NAME") or "NEURALIS"
         self.run_name = mlflow_cfg.get("run_name") or f"{self.stage}-{self.local_run_id}"
 
         self.dagshub_enabled = _to_bool(
@@ -70,7 +70,7 @@ class MLflowTracker:
         self.tracking_backend = "mlflow"
         model_registry_cfg = mlflow_cfg.get("model_registry", {}) if isinstance(mlflow_cfg.get("model_registry", {}), dict) else {}
         self.model_registry_enabled = _to_bool(model_registry_cfg.get("enabled"), default=True)
-        self.model_registry_name = str(model_registry_cfg.get("name") or f"A_ML_25-{self.stage}-model").strip()
+        self.model_registry_name = str(model_registry_cfg.get("name") or f"NEURALIS-{self.stage}-model").strip()
         self.dvc_rev = self._resolve_dvc_rev()
 
     def _resolve_dvc_rev(self) -> str:

@@ -195,7 +195,7 @@ def embeded_text_features(df):
         pd.DataFrame: Dataframe with new embedding features added.
     """
     # ===========================
-    # 1️⃣ Text Cleaning Function
+    # 1. Text Cleaning Function
     # ===========================
     def clean_text(text):
         if pd.isna(text):
@@ -208,10 +208,10 @@ def embeded_text_features(df):
         return text
 
     # ===========================
-    # 2️⃣ Function to process a text column
+    # 2. Function to process a text column
     # ===========================
     def process_text_column(df, text_col, prefix):
-        print(f"🔹 Processing column: {text_col}")
+        print(f"Processing column: {text_col}")
 
         # Clean
         df[text_col] = df[text_col].fillna("").apply(clean_text)
@@ -256,11 +256,11 @@ def embeded_text_features(df):
         # Add final combined embedding as one column
         df[f'{prefix}_embedding_vector'] = [vec for vec in X_combined]
 
-        print(f"✅ Finished {text_col} | TF-IDF dim: {X_tfidf.shape[1]} | Embedding dim: {X_embed.shape[1]} | Combined dim: {X_combined.shape[1]}")
+        print(f"Finished {text_col} | TF-IDF dim: {X_tfidf.shape[1]} | Embedding dim: {X_embed.shape[1]} | Combined dim: {X_combined.shape[1]}")
         return df
 
     # ===========================
-    # 4️⃣ Apply to all text columns
+    # 4. Apply to all text columns
     # ===========================
     text_columns = [
         ('item_name', 'item'),
@@ -275,9 +275,9 @@ def embeded_text_features(df):
             df[f'{prefix}_embedding_vector'] = np.nan  # if column missing
 
 
-    print("\n🎯 Final dataframe columns:")
+    print("\nFinal dataframe columns:")
     print(df.columns)
-    print("\n✅ All text columns converted into embedding vectors and added to df.")
+    print("\nAll text columns converted into embedding vectors and added to df.")
     
     return df
 
@@ -295,7 +295,7 @@ def build_text_embeddings(df, text_columns=None):
 
     # ------------------- Helper: Build Embeddings -------------------
     def build_embeddings(df, text_col, prefix):
-        print(f"🔹 Creating embeddings for {text_col}")
+        print(f"Creating embeddings for {text_col}")
 
         df[text_col] = df[text_col].fillna("").apply(clean_text)
 
@@ -314,7 +314,7 @@ def build_text_embeddings(df, text_columns=None):
             model = SentenceTransformer("all-MiniLM-L6-v2", token=_hf_tok or None)
             X_embed = model.encode(df[text_col].tolist(), show_progress_bar=False)
         except Exception:
-            print("⚠️ SBERT not found, using random fallback embeddings (300-dim).")
+            print("[WARNING] SBERT not found, using random fallback embeddings (300-dim).")
             embed_dim = 300
 
             def rand_vec(seed):
@@ -337,7 +337,7 @@ def build_text_embeddings(df, text_columns=None):
 
         df[f"{prefix}_embedding_vector"] = [vec for vec in combined]
 
-        print(f"✅ {text_col}: embedding dim {combined.shape[1]}")
+        print(f"Finished {text_col}: embedding dim {combined.shape[1]}")
         return df
 
     # ------------------- Main Loop -------------------
@@ -353,11 +353,11 @@ def build_text_embeddings(df, text_columns=None):
             df = build_embeddings(df, col, prefix)
         else:
             print(
-                f"⚠️ Column '{col}' not found — filling {prefix}_embedding_vector with NaN."
+                f"[WARNING] Column '{col}' not found — filling {prefix}_embedding_vector with NaN."
             )
             df[f"{prefix}_embedding_vector"] = np.nan
 
-    print("\n✅ Final embedding columns added:")
+    print("\nFinal embedding columns added:")
     print([f"{prefix}_embedding_vector" for _, prefix in text_columns])
     
     return df

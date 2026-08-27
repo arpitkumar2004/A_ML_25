@@ -50,7 +50,7 @@ license: {license_name}
 
 # {space_title}
 
-This Space serves the `A_ML_25` FastAPI inference app as a Docker Space.
+This Space serves the `NEURALIS` FastAPI inference app as a Docker Space.
 
 ## Deployed Model
 
@@ -134,7 +134,7 @@ def create_hf_space_package(
     port: int = 7860,
     space_repo_id: str = "arpitkumariitkgp/aml25",
     space_title: str = "AML25",
-    space_emoji: str = "📦",
+    space_emoji: str = "",
     color_from: str = "blue",
     color_to: str = "green",
     license_name: str = "mit",
@@ -205,7 +205,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=7860)
     parser.add_argument("--space-repo-id", default="arpitkumariitkgp/aml25")
     parser.add_argument("--space-title", default="AML25")
-    parser.add_argument("--space-emoji", default="📦")
+    parser.add_argument("--space-emoji", default="")
     parser.add_argument("--color-from", default="blue")
     parser.add_argument("--color-to", default="green")
     parser.add_argument("--license-name", default="mit")

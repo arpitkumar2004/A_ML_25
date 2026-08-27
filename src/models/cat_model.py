@@ -38,9 +38,9 @@ class CatModel(BaseModel):
 
         if has_gpu:
             default_params["task_type"] = "GPU"
-            logger.info("⚡ CatModel GPU Acceleration Enabled (task_type='GPU')")
+            logger.info("CatModel GPU Acceleration Enabled (task_type='GPU')")
         else:
-            logger.info("ℹ️ CatModel running in CPU mode.")
+            logger.info("CatModel running in CPU mode.")
 
         default_params.update(params)
         self.model = CatBoostRegressor(**default_params)

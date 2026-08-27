@@ -246,7 +246,7 @@ def benchmark_model_suite(df: pd.DataFrame) -> dict:
     stacker_weights_list = []
 
     for fold, (train_idx, val_idx) in enumerate(kf.split(X_raw)):
-        logger.info(f"  ⚡ [CV Fold {fold+1}/5] Evaluating model suite on {len(train_idx)} train / {len(val_idx)} val samples...")
+        logger.info(f"  [CV Fold {fold+1}/5] Evaluating model suite on {len(train_idx)} train / {len(val_idx)} val samples...")
         X_tr, X_va = X_raw[train_idx], X_raw[val_idx]
         y_tr, y_va = y_log[train_idx], y_log[val_idx]
         y_val_raw = y_raw[val_idx]
@@ -890,7 +890,7 @@ def run_optuna_hpo_study(df: pd.DataFrame, n_trials: int = 15) -> dict:
                 smapes.append(smape(y_raw[va_idx], p_val))
             
             mean_sm = float(np.mean(smapes))
-            logger.info(f"  🎯 [Optuna Trial {trial.number+1}/{n_trials}] Model={model_type} -> Val SMAPE: {mean_sm:.4f}%")
+            logger.info(f"  [Optuna Trial {trial.number+1}/{n_trials}] Model={model_type} -> Val SMAPE: {mean_sm:.4f}%")
             trial_history.append({"trial_number": trial.number + 1, "params": trial.params, "val_smape": mean_sm})
             return mean_sm
 
@@ -984,9 +984,9 @@ def main():
         hpo_stats      = run_optuna_hpo_study(df)
         latency_stats  = benchmark_serving_latency()
 
-        logger.info("🎉 Report data and ALL 15 publication figures generated successfully!")
+        logger.info("Report data and ALL 15 publication figures generated successfully!")
     except Exception as e:
-        logger.critical(f"❌ FAIL-FIRST: Report generation failed with exception: {e}", exc_info=True)
+        logger.critical(f"FAIL-FIRST: Report generation failed with exception: {e}", exc_info=True)
         sys.exit(1)
 
 

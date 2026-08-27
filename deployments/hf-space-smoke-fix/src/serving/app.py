@@ -314,7 +314,7 @@ class ModelService:
 
 
 service = ModelService()
-app = FastAPI(title="A_ML_25 Inference Service", version="1.0.0")
+app = FastAPI(title="NEURALIS Inference Service", version="1.0.0")
 
 
 @app.middleware("http")
@@ -365,7 +365,7 @@ def root():
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>A_ML_25 • Price Predictor</title>
+    <title>NEURALIS • Price Predictor</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
         .wrap { max-width: 820px; margin: 32px auto; padding: 0 16px; }

@@ -4,7 +4,7 @@ def unit_emid(df):
   import pandas as pd
 
   # -------------------------------------------------------
-  # 1️⃣ UNIT NORMALIZATION MAP
+  # 1. UNIT NORMALIZATION MAP
   # -------------------------------------------------------
   UNIT_MAP = {
       # --- Volume ---
@@ -77,7 +77,7 @@ def unit_emid(df):
   }
 
   # -------------------------------------------------------
-  # 2️⃣ NORMALIZE UNIT FUNCTION
+  # 2. NORMALIZE UNIT FUNCTION
   # -------------------------------------------------------
   def normalize_unit(unit):
       """
@@ -101,7 +101,7 @@ def unit_emid(df):
       return "unknown"
 
   # -------------------------------------------------------
-  # 3️⃣ CONVERSION TO BASE UNIT
+  # 3. CONVERSION TO BASE UNIT
   # -------------------------------------------------------
   def convert_to_base_with_unit(value, unit):
       """
@@ -149,7 +149,7 @@ def unit_emid(df):
 
 
   # -------------------------------------------------------
-  # 4️⃣ APPLY TO DATAFRAME
+  # 4. APPLY TO DATAFRAME
   # -------------------------------------------------------
 
   # Example: your dataframe columns
@@ -169,7 +169,7 @@ def unit_emid(df):
   df["measure_text"] = df["value_converted"].astype(str) + " " + df["base_unit"]
 
   # -------------------------------------------------------
-  # 5️⃣ CLEAR GPU CACHE IF YOU’LL CREATE NEW EMBEDDINGS
+  # 5. CLEAR GPU CACHE IF YOU'LL CREATE NEW EMBEDDINGS
   # -------------------------------------------------------
   import gc, torch
   gc.collect()

@@ -44,53 +44,60 @@ Built to bridge the gap between notebook experimentation and real-world deployme
 
 ---
 
-## System Architecture
+## System Architecture & Pipeline Suite
 
-### High-Level Architectural Diagram
+### 1. High-Level System Architecture 
 
-![High-Level System Architecture](docs/system_archit.png)
+![NEURALIS High-Level System Architecture](docs/neuralis_architecture_high_level.png)
 
-### Detailed Component Breakdown
+### 2. Multimodal Feature Engineering & Stacking ML Pipeline
 
-![Detailed Component Architecture](docs/System_architecture.png)
+![NEURALIS Feature & ML Pipeline](docs/neuralis_feature_ml_pipeline.png)
 
-### End-to-End Data & Execution Flow
+### 3. MLOps Governance, FastAPI Serving & CI/CD Deployment
+
+![NEURALIS MLOps, Serving & CI/CD](docs/neuralis_mlops_serving_cicd.png)
+
+### End-to-End Data & Execution Flow 
 
 ```mermaid
-flowchart LR
-    subgraph Data & Features
-        A[Raw Data\ntrain.csv / test.csv] --> B[src/data\nLoad + Parse + Clean]
-        B --> C[src/features\nText/Image/Numeric Features]
+flowchart TD
+    %% Stage 1: Data & Feature Engineering
+    subgraph S1 ["1. Multimodal Data Ingestion & Processing"]
+        direction LR
+        RAW["Raw Product Catalog\n(Text, Images & Numeric Metadata)"]
+        PARSER["Multimodal Feature Builder\n• Text: SBERT & TF-IDF Vectorizers\n• Vision: ResNet / CLIP Embeddings\n• Numeric: Regex Unit Extractor (g, ml, count)"]
+        RAW --> PARSER
     end
 
-    subgraph Pipeline Orchestration
-        C --> D[src/pipelines/train_pipeline.py\nTraining Orchestration]
-        D --> E[src/training + src/models\nCV Models + Stacking Ensemble]
-        E --> F[experiments/\nBundles + OOF + Reports]
-        
-        C --> G[src/pipelines/inference_pipeline.py\nBatch Inference]
-        F --> G
-        G --> H[src/inference/postprocess.py\nClip / Round / Format]
-        H --> I[data/submission\nPrediction CSV]
+    %% Stage 2: Stacking Ensemble Training
+    subgraph S2 ["2. Stacking ML Pipeline"]
+        direction LR
+        BASE["5 Base Models (5-Fold CV)\n(LightGBM + XGBoost + CatBoost + RF + Ridge)"]
+        STACKER["Stacking Meta-Learner\n(RidgeCV Stacker Optimized for SMAPE)"]
+        BASE --> STACKER
     end
 
-    subgraph Serving & UI
-        C --> J[src/serving/app.py\nFastAPI Online Serving]
-        F --> J
-        J --> K["API: /healthz /readyz /v1/predict"]
-        J --> L["Frontend: Web Dashboard\nfrontend/index.html"]
+    %% Stage 3: Packaging & Governance
+    subgraph S3 ["3. MLOps & Model Governance"]
+        direction LR
+        BUNDLE["Immutable Model Bundle\n(Model Weights + Vectorizers + Preprocessors)"]
+        REGISTRY["Versioned Model Registry\n(Stage Promotion: Staging -> Production)"]
+        BUNDLE --> REGISTRY
     end
 
-    subgraph Entrypoint & MLOps
-        M[main.py CLI] --> D
-        M --> G
-        M --> J
-        M --> N[Registry: Promote / Rollback]
-
-        O[GitHub Actions CI/CD] --> P[Syntax & Pytest Gate]
-        O --> Q[Retrain & DVC Pull]
-        O --> R[HF Space Deploy & Probing]
+    %% Stage 4: Serving & Operations
+    subgraph S4 ["4. Real-Time Serving & Monitoring"]
+        direction LR
+        API["FastAPI Online Service\n(REST API: /v1/predict, /healthz, /metrics)"]
+        UI["Interactive Web Dashboard\n(Real-Time Analytics & Inference UI)"]
+        API <--> UI
     end
+
+    %% Pipeline Execution Connections
+    S1 ==> S2
+    S2 ==> S3
+    S3 ==> S4
 ```
 
 ---
@@ -98,7 +105,7 @@ flowchart LR
 ## Repository Structure
 
 ```text
-A_ML_25/
+NEURALIS/
 ├── main.py                        # Central CLI entrypoint (train, inference, features, ensemble, promote, etc.)
 ├── configs/                       # Production YAML configurations
 │   ├── training/                  # Cross-validation & trainer configs
@@ -193,8 +200,8 @@ The feature pipeline (`src/features/`) generates a rich representation combining
 
 ```bash
 # Clone the repository
-git clone https://github.com/arpitkumar2004/A_ML_25.git
-cd A_ML_25
+git clone https://github.com/arpitkumar2004/NEURALIS.git
+cd NEURALIS
 
 # Create and activate virtual environment
 python -m venv .venv

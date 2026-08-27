@@ -43,9 +43,9 @@ class XGBModel(BaseModel):
                 "tree_method": "hist",
                 "device": "cuda"
             })
-            logger.info("⚡ XGBModel GPU Acceleration Enabled (device='cuda', tree_method='hist')")
+            logger.info("XGBModel GPU Acceleration Enabled (device='cuda', tree_method='hist')")
         else:
-            logger.info("ℹ️ XGBModel running in CPU mode.")
+            logger.info("XGBModel running in CPU mode.")
 
         default_params.update(params)
         self.model = XGBRegressor(**default_params)

@@ -3,299 +3,468 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NEURALIS | Autonomous Valuation Matrix</title>
+  <title>NEURALIS | Autonomous Multimodal Valuation Engine</title>
+  <meta name="description" content="Deciphering product market value at the intersection of vision, NLP, and ensemble intelligence." />
+  
+  <!-- Fonts & Styles -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/frontend/dashboard.css" />
 </head>
-<body class="viewer-mode">
-  <!-- Minimalist Google Top Bar -->
+<body>
+  <!-- Skip link for keyboard accessibility -->
+  <a href="#mainContent" class="skip-link">Skip to main content</a>
+
+  <!-- Top Navigation Header -->
   <header class="topbar">
     <div class="brand">
-      <span class="brand-name">NEURALIS</span>
-      <span class="brand-divider">/</span>
-      <span class="brand-subtitle">Autonomous Valuation Matrix</span>
-    </div>
-    
-    <div class="topbar-actions">
-      <div class="mode-tabs" role="tablist">
-        <button class="mode-tab is-active" id="viewerModeBtn" type="button" role="tab" aria-selected="true">Viewer</button>
-        <button class="mode-tab" id="engineerModeBtn" type="button" role="tab" aria-selected="false">Engineer</button>
+      <div class="brand-logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+          <polyline points="2 17 12 22 22 17"/>
+          <polyline points="2 12 12 17 22 12"/>
+        </svg>
       </div>
+      <div class="brand-text">
+        <span class="brand-name">NEURALIS</span>
+        <span class="brand-badge">PROD</span>
+      </div>
+      <span class="brand-divider" aria-hidden="true">/</span>
+      <span class="brand-subtitle">Multimodal Valuation Matrix</span>
+    </div>
 
-      <div class="status-pill">
-        <span class="status-dot" id="statusDot"></span>
-        <span id="apiStatusText">Checking</span>
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs" aria-label="Main Navigation">
+      <button class="nav-tab active" id="tabValuation" type="button" role="tab" aria-selected="true" aria-controls="viewValuation">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        </svg>
+        <span>Valuation Workspace</span>
+      </button>
+      <button class="nav-tab" id="tabTelemetry" type="button" role="tab" aria-selected="false" aria-controls="viewTelemetry">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        <span>Model Telemetry</span>
+      </button>
+      <button class="nav-tab" id="tabHistory" type="button" role="tab" aria-selected="false" aria-controls="viewHistory">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+        <span>Valuation History</span>
+        <span class="tab-badge" id="historyCountBadge">0</span>
+      </button>
+    </nav>
+    
+    <!-- Topbar Actions & Status -->
+    <div class="topbar-actions">
+      <div class="status-pill" id="statusPill" title="System Operational Readiness Probe">
+        <span class="status-dot warning" id="statusDot"></span>
+        <span id="apiStatusText">Connecting...</span>
       </div>
       
-      <div class="meta-pill"><span class="meta-label">Bundle</span><span class="meta-val" id="activeRunId">--</span></div>
-      <div class="meta-pill"><span class="meta-label">Env</span><span class="meta-val" id="environmentTag">PROD</span></div>
-      <div class="meta-pill"><span class="meta-label">p95</span><span class="meta-val" id="p95Latency">0 ms</span></div>
+      <div class="keyboard-hints" title="Keyboard Shortcuts Active">
+        <kbd class="kbd-key">Ctrl</kbd> + <kbd class="kbd-key">Enter</kbd> = Calculate
+      </div>
     </div>
   </header>
 
-  <!-- Hero Section -->
-  <section class="hero-section">
-    <div class="hero-text">
-      <h1>NEURALIS: Autonomous Valuation Matrix</h1>
-      <p>Deciphering market value at the intersection of vision, NLP, and ensemble intelligence.</p>
+  <!-- Main View Container -->
+  <main id="mainContent" class="app-container">
+    
+    <!-- VIEW 1: VALUATION WORKSPACE -->
+    <div class="view-panel active" id="viewValuation" role="tabpanel" aria-labelledby="tabValuation">
+      <div class="workspace-grid">
+        
+        <!-- Left Column: Input Form -->
+        <section class="card input-card" aria-labelledby="inputSectionTitle">
+          <div class="card-header">
+            <div>
+              <h2 id="inputSectionTitle">Product Information</h2>
+              <p>Enter text catalog content and visual asset to compute instant multimodal price valuation.</p>
+            </div>
+            <button class="btn btn-ghost btn-xs" id="resetFormBtn" type="button" title="Reset all form fields (Shortcut: Esc)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              <span>Reset</span>
+            </button>
+          </div>
+
+          <form id="valuationForm" onsubmit="return false;" novalidate>
+            <!-- Catalog Description -->
+            <div class="form-group">
+              <div class="label-row">
+                <label for="catalogContent">Catalog Description <span class="required-star">*</span></label>
+                <span class="char-count" id="catalogCharCount">0 chars</span>
+              </div>
+              <textarea id="catalogContent" class="form-control" rows="5" placeholder="Paste product title, features, bullet points, package specs (e.g. 500 ml, 6-pack)..." required></textarea>
+              <div class="form-hint">Rich text NLP extractor detects weight, volume, unit count & semantic terms.</div>
+            </div>
+
+            <!-- Product Image Input: URL + Drag & Drop -->
+            <div class="form-group">
+              <label for="imageUrl">Product Image (URL or Local File)</label>
+              <input id="imageUrl" type="url" class="form-control mb-8" placeholder="Paste image URL (https://...)" />
+              
+              <div class="upload-dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload product image file by dragging or browsing">
+                <input type="file" id="imageFileInput" accept="image/*" class="file-input-hidden" tabindex="-1" />
+                <div class="dropzone-content" id="dropzoneContent">
+                  <div class="upload-icon-wrap">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="17 8 12 3 7 8"/>
+                      <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                  </div>
+                  <div class="dropzone-text">
+                    <span>Drag & drop image file or <button type="button" class="link-btn" id="browseFilesBtn">Browse computer</button></span>
+                    <small>Supports PNG, JPG, WEBP (CLIP Vision embedding)</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Image Preview Box -->
+            <div class="image-preview-container" id="imagePreviewContainer">
+              <img id="imagePreview" alt="Loaded product preview" />
+              <div class="image-fallback" id="imageFallback">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                <span>No image loaded — zero-vector visual fallback active</span>
+              </div>
+              <button type="button" class="btn-remove-image is-hidden" id="removeImageBtn" title="Remove loaded image">✕</button>
+            </div>
+
+            <!-- Category & Listed Reference Price -->
+            <div class="grid-2">
+              <div class="form-group">
+                <label for="categorySelect">Product Category</label>
+                <select id="categorySelect" class="form-control">
+                  <option value="Pantry & Grocery">Pantry & Grocery</option>
+                  <option value="Beauty & Personal Care">Beauty & Personal Care</option>
+                  <option value="Electronics & Gadgets">Electronics & Gadgets</option>
+                  <option value="Home & Kitchen">Home & Kitchen</option>
+                  <option value="Apparel & Fashion">Apparel & Fashion</option>
+                  <option value="Health & Household">Health & Household</option>
+                  <option value="Toys & Games">Toys & Games</option>
+                  <option value="Sports & Outdoors">Sports & Outdoors</option>
+                  <option value="Other">Other (Specify custom)</option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label for="referencePrice">Listed / Ground Price ($)</label>
+                <div class="input-with-prefix">
+                  <span class="input-prefix">$</span>
+                  <input id="referencePrice" type="number" step="0.01" min="0" class="form-control" placeholder="12.99" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Custom Category Group -->
+            <div class="form-group is-hidden" id="customCategoryGroup">
+              <label for="categoryCustom">Custom Category Name</label>
+              <input id="categoryCustom" type="text" class="form-control" placeholder="Enter custom taxonomy..." />
+            </div>
+
+            <!-- Progressive Disclosure: Advanced Settings Accordion -->
+            <div class="accordion-item">
+              <button type="button" class="accordion-header" id="accordionToggle" aria-expanded="false" aria-controls="accordionBody">
+                <span class="accordion-title">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  <span>Advanced Parameters & Calibration</span>
+                </span>
+                <span class="accordion-icon">▾</span>
+              </button>
+              
+              <div class="accordion-body is-hidden" id="accordionBody">
+                <div class="grid-2">
+                  <div class="form-group">
+                    <label for="optMinValue">Floor Price Limit ($)</label>
+                    <input id="optMinValue" type="number" step="0.5" value="0.0" class="form-control" />
+                  </div>
+                  <div class="form-group">
+                    <label for="optRound">Price Calibration</label>
+                    <select id="optRound" class="form-control">
+                      <option value="true" selected>Round to nearest Cents ($0.01)</option>
+                      <option value="false">Exact Float Precision</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Primary Action Buttons -->
+            <div class="form-actions">
+              <button class="btn btn-primary btn-lg" id="runBtn" type="button">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span id="runBtnText">Calculate Valuation</span>
+              </button>
+              <button class="btn btn-secondary" id="sampleBtn" type="button" title="Load sample grocery item (Shortcut: Alt+S)">
+                <span>Load Sample</span>
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <!-- Right Column: Results & Analytics -->
+        <section class="output-column" aria-labelledby="outputSectionTitle">
+          
+          <!-- Pipeline Loading Progress (Visible during inference) -->
+          <div class="card pipeline-card is-hidden" id="pipelineProgressCard">
+            <h3>Multimodal Execution Pipeline</h3>
+            <div class="pipeline-steps">
+              <div class="step-item" id="stepText">
+                <span class="step-icon">⏳</span>
+                <span class="step-label">NLP & Regex Signal Extraction</span>
+              </div>
+              <div class="step-item" id="stepVision">
+                <span class="step-icon">⏳</span>
+                <span class="step-label">CLIP Visual Embedding Matrix</span>
+              </div>
+              <div class="step-item" id="stepEnsemble">
+                <span class="step-icon">⏳</span>
+                <span class="step-label">Stacking Ensemble Meta-Learner</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Primary Result Card -->
+          <div class="card result-card" id="mainResultCard">
+            <div class="result-top-bar">
+              <span class="result-label" id="outputSectionTitle">Estimated Market Valuation</span>
+              <button type="button" class="btn-action-icon" id="copySummaryBtn" title="Copy valuation summary to clipboard" aria-label="Copy summary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+
+            <!-- Price Callout display -->
+            <div class="price-hero">
+              <div class="price-display" id="predictedPrice" aria-live="polite">$--</div>
+              <div class="delta-container">
+                <span class="delta-pill is-hidden" id="deltaPill">--</span>
+              </div>
+            </div>
+            
+            <p class="result-meta" id="predictionMeta" aria-live="polite">
+              Enter catalog content on the left and click "Calculate Valuation".
+            </p>
+
+            <!-- Confidence Interval Band -->
+            <div class="confidence-container">
+              <div class="confidence-header">
+                <span>Confidence Band (95% Interval)</span>
+                <strong id="confidenceBand">$-- – $--</strong>
+              </div>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="confidenceBar"></div>
+              </div>
+              <p class="confidence-note" id="confidenceNote">Valuation confidence score updates automatically upon pipeline completion.</p>
+            </div>
+
+            <!-- Metric Highlights Grid -->
+            <div class="metrics-row">
+              <div class="metric-item">
+                <span class="metric-label">Listed Price</span>
+                <strong class="metric-value" id="referenceView">--</strong>
+              </div>
+              <div class="metric-item">
+                <span class="metric-label">Valuation Delta</span>
+                <strong class="metric-value" id="deltaView">--</strong>
+              </div>
+              <div class="metric-item">
+                <span class="metric-label">Model Confidence</span>
+                <strong class="metric-value" id="confidenceRatingView">--</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Feature Influence Breakdown -->
+          <div class="card drivers-card">
+            <div class="card-header-sm">
+              <h3>Valuation Driver Breakdown</h3>
+              <span class="subtext">Modality weight breakdown</span>
+            </div>
+            
+            <div class="drivers-grid">
+              <div class="driver-item">
+                <div class="driver-header">
+                  <span>Text & Description</span>
+                  <strong id="textDriver">--</strong>
+                </div>
+                <div class="driver-bar-bg"><div class="driver-bar-fill" id="textDriverBar"></div></div>
+                <p class="driver-note" id="textDriverNote">Awaiting calculation</p>
+              </div>
+
+              <div class="driver-item">
+                <div class="driver-header">
+                  <span>Visual Image</span>
+                  <strong id="imageDriver">--</strong>
+                </div>
+                <div class="driver-bar-bg"><div class="driver-bar-fill" id="imageDriverBar"></div></div>
+                <p class="driver-note" id="imageDriverNote">Awaiting calculation</p>
+              </div>
+
+              <div class="driver-item">
+                <div class="driver-header">
+                  <span>Parsed Specs & Units</span>
+                  <strong id="numericDriver">--</strong>
+                </div>
+                <div class="driver-bar-bg"><div class="driver-bar-fill" id="numericDriverBar"></div></div>
+                <p class="driver-note" id="numericDriverNote">Awaiting calculation</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Diagnostics & Diagnostics Trace Accordion -->
+          <div class="accordion-item card-accordion">
+            <button type="button" class="accordion-header" id="traceToggle" aria-expanded="false" aria-controls="traceBody">
+              <span class="accordion-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                <span>Pipeline Execution Trace & Diagnostics</span>
+              </span>
+              <span class="accordion-icon">▾</span>
+            </button>
+            <div class="accordion-body is-hidden" id="traceBody">
+              <pre class="code-block" id="traceCodeBlock">Run a valuation to inspect pipeline diagnostics JSON...</pre>
+            </div>
+          </div>
+
+        </section>
+      </div>
     </div>
-    <div class="hero-controls">
-      <button class="btn btn-outline" id="tryDemoBtn" type="button">Try Demo Sample</button>
-      <button class="btn btn-ghost" id="openArchBtn" type="button">Architecture Specs</button>
+
+    <!-- VIEW 2: MODEL TELEMETRY & GOVERNANCE -->
+    <div class="view-panel" id="viewTelemetry" role="tabpanel" aria-labelledby="tabTelemetry">
+      <div class="telemetry-grid">
+        
+        <!-- Row 1: System Operational Metrics -->
+        <div class="card telemetry-card">
+          <h3>Operational Latency & Throughput</h3>
+          <p class="card-subtitle">Real-time service performance metrics served from <code>/metrics/json</code>.</p>
+          
+          <div class="telemetry-metrics-grid">
+            <div class="stat-box">
+              <span class="stat-label">Request Count</span>
+              <span class="stat-value" id="telRequestCount">--</span>
+              <span class="stat-meta">Total HTTP hits</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">p50 Latency</span>
+              <span class="stat-value" id="telP50">-- ms</span>
+              <span class="stat-meta">Median execution</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">p95 Latency</span>
+              <span class="stat-value" id="telP95">-- ms</span>
+              <span class="stat-meta">95th percentile</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">Error Rate</span>
+              <span class="stat-value" id="telErrorRate">0.0%</span>
+              <span class="stat-meta">HTTP 500 / failures</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Production Model Bundle Info -->
+        <div class="card telemetry-card">
+          <h3>Production Model Bundle</h3>
+          <p class="card-subtitle">Active model registry bundle loaded into microservice context.</p>
+
+          <div class="bundle-details-grid">
+            <div class="detail-row">
+              <span class="detail-key">Active Run ID</span>
+              <span class="detail-val" id="telRunId">Loading...</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-key">Bundle Path</span>
+              <span class="detail-val" id="telBundlePath">Loading...</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-key">Environment Stage</span>
+              <span class="detail-val" id="telEnvStage">PRODUCTION</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-key">Data Quality Pass Rate</span>
+              <span class="detail-val" id="telDqPassRate">100%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 3: External Governance Links -->
+        <div class="card telemetry-card">
+          <h3>Repository & Registry Links</h3>
+          <p class="card-subtitle">Governance artifacts, experiment trackers, and CI/CD pipelines.</p>
+
+          <div class="links-flex">
+            <a class="link-card" id="linkGithub" href="https://github.com/arpitkumar2004/NEURALIS" target="_blank" rel="noopener">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+              <div>
+                <strong>GitHub Repository</strong>
+                <small>Source codebase & CI/CD workflows</small>
+              </div>
+            </a>
+
+            <a class="link-card" id="linkDagshub" href="#" target="_blank" rel="noopener">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+              <div>
+                <strong>DagsHub Tracking</strong>
+                <small>MLflow tracking & DVC remote data store</small>
+              </div>
+            </a>
+          </div>
+        </div>
+
+      </div>
     </div>
-    <!-- Hidden element hooks for JS compatibility -->
-    <div style="display:none;">
-      <span id="heroHealth"></span>
-      <span id="heroRun"></span>
-      <span id="heroLatency"></span>
-      <span id="heroFallback"></span>
+
+    <!-- VIEW 3: VALUATION HISTORY -->
+    <div class="view-panel" id="viewHistory" role="tabpanel" aria-labelledby="tabHistory">
+      <div class="card history-card">
+        <div class="history-header">
+          <div>
+            <h2>Local Session Valuation History</h2>
+            <p>Saved valuation records from this browser session.</p>
+          </div>
+          <div class="history-actions">
+            <button class="btn btn-secondary btn-sm" id="exportHistoryBtn" type="button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Export CSV</span>
+            </button>
+            <button class="btn btn-ghost btn-sm" id="clearHistoryBtn" type="button">
+              <span>Clear History</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="history-table" id="historyTable">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Product Description</th>
+                <th>Category</th>
+                <th>Estimated Price</th>
+                <th>Listed Price</th>
+                <th>Confidence</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody">
+              <tr class="empty-row">
+                <td colspan="7">No saved valuation history yet. Run a calculation in the workspace!</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
-  </section>
 
-  <!-- Main Application Workspace -->
-  <main class="app-container">
-    <!-- Left Column: Input Form -->
-    <section class="card input-card">
-      <div class="card-header">
-        <h2>Input Context</h2>
-        <p>Provide product details to execute the pricing pipeline.</p>
-      </div>
-
-      <div class="form-group">
-        <label for="catalogContent">Catalog Description</label>
-        <textarea id="catalogContent" class="form-control" rows="5" placeholder="Paste product title, bullet points, package details..."></textarea>
-      </div>
-
-      <div class="form-group">
-        <label for="imageUrl">Image URL</label>
-        <input id="imageUrl" type="url" class="form-control" placeholder="https://example.com/product.jpg" />
-      </div>
-
-      <div class="image-preview-container">
-        <img id="imagePreview" alt="Product preview" />
-        <div class="image-fallback" id="imageFallback">
-          <span>No image preview provided</span>
-        </div>
-      </div>
-
-      <div class="grid-2 engineer-only">
-        <div class="form-group">
-          <label for="sampleId">Sample ID</label>
-          <input id="sampleId" type="number" class="form-control" value="1001" />
-        </div>
-        <div class="form-group">
-          <label for="numericValue">Quantity Value</label>
-          <input id="numericValue" type="number" step="0.001" class="form-control" placeholder="e.g. 500" />
-        </div>
-      </div>
-
-      <div class="grid-2">
-        <div class="form-group">
-          <label for="categoryText">Category</label>
-          <input id="categoryText" type="text" class="form-control" placeholder="Pantry / Electronics" />
-        </div>
-        <div class="form-group">
-          <label for="referencePrice">Reference Price ($)</label>
-          <input id="referencePrice" type="number" step="0.001" class="form-control" placeholder="12.99" />
-        </div>
-      </div>
-
-      <div class="form-group engineer-only">
-        <label for="unitText">Unit</label>
-        <input id="unitText" type="text" class="form-control" placeholder="g / ml / oz" />
-      </div>
-
-      <div class="checkbox-group engineer-only">
-        <input id="simulateBroken" type="checkbox" />
-        <label for="simulateBroken">Simulate Broken Image (Test Fallback)</label>
-      </div>
-
-      <div class="form-actions">
-        <button class="btn btn-primary" id="runBtn" type="button">Execute Serving Pipeline</button>
-        <button class="btn btn-secondary" id="sampleBtn" type="button">Load Sample</button>
-      </div>
-
-      <details class="code-details engineer-only">
-        <summary>Inspect Request Payload</summary>
-        <pre id="payloadPreview" class="code-block"></pre>
-      </details>
-    </section>
-
-    <!-- Right Column: Output & Intelligence -->
-    <section class="output-column">
-      <!-- Main Prediction Card -->
-      <div class="card result-card">
-        <div class="result-header">
-          <span class="result-label">Predicted Price</span>
-          <div class="price-display" id="predictedPrice" aria-live="polite">$--</div>
-          <p class="result-meta" id="predictionMeta" aria-live="polite">Ready for prediction run.</p>
-        </div>
-
-        <div class="confidence-container">
-          <div class="confidence-header">
-            <span>Confidence Interval</span>
-            <strong id="confidenceBand">--</strong>
-          </div>
-          <div class="progress-bar-bg">
-            <div class="progress-bar-fill" id="confidenceBar"></div>
-          </div>
-          <p class="confidence-note" id="confidenceNote">Execute prediction to calculate model uncertainty.</p>
-        </div>
-
-        <div class="metrics-row">
-          <div class="metric-item">
-            <span>Reference</span>
-            <strong id="referenceView">--</strong>
-          </div>
-          <div class="metric-item">
-            <span>Delta</span>
-            <strong id="deltaView">--</strong>
-          </div>
-          <div class="metric-item">
-            <span>Variant</span>
-            <strong id="variantView">--</strong>
-          </div>
-          <div class="metric-item">
-            <span>Canary MAE</span>
-            <strong id="canaryView">--</strong>
-          </div>
-        </div>
-      </div>
-
-      <!-- Feature Drivers Card -->
-      <div class="card drivers-card">
-        <h3>Feature Drivers Contribution</h3>
-        <div class="drivers-grid">
-          <div class="driver-item">
-            <div class="driver-header">
-              <span>Text Embeddings (SBERT/TF-IDF)</span>
-              <strong id="textDriver">--</strong>
-            </div>
-            <p id="textDriverNote">Awaiting run</p>
-          </div>
-          <div class="driver-item">
-            <div class="driver-header">
-              <span>Image Representations (CLIP/ResNet)</span>
-              <strong id="imageDriver">--</strong>
-            </div>
-            <p id="imageDriverNote">Awaiting run</p>
-          </div>
-          <div class="driver-item">
-            <div class="driver-header">
-              <span>Parsed Numeric Signals</span>
-              <strong id="numericDriver">--</strong>
-            </div>
-            <p id="numericDriverNote">Awaiting run</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- System Summary Pills -->
-      <div class="summary-strip">
-        <div class="strip-item"><span>Schema</span><strong id="schemaSummary">Aligned</strong></div>
-        <div class="strip-item"><span>Feature Width</span><strong id="featureWidthView">--</strong></div>
-        <div class="strip-item"><span>Ensemble Models</span><strong id="modelCountView">--</strong></div>
-        <div class="strip-item"><span>Fallback State</span><strong id="fallbackStateView">Ready</strong></div>
-      </div>
-
-      <!-- Execution Trace Log Panel -->
-      <section class="card terminal-card is-hidden" id="terminalPanel">
-        <div class="terminal-header">
-          <span>Execution Trace</span>
-          <span class="terminal-status" id="terminalStatus">Idle</span>
-        </div>
-        <div class="terminal-body" id="terminalBody"></div>
-      </section>
-
-      <!-- Advanced Engineer Diagnostic Details -->
-      <section class="card details-card engineer-only">
-        <div class="tabs-nav" role="tablist">
-          <button class="tab-btn is-active" data-tab="schema" type="button">Schema Processing</button>
-          <button class="tab-btn" data-tab="ensemble" type="button">Ensemble Breakdown</button>
-          <button class="tab-btn" data-tab="parsed" type="button">Parsed Attributes</button>
-          <button class="tab-btn" data-tab="system" type="button">Telemetry</button>
-        </div>
-
-        <div class="tab-content">
-          <div class="tab-pane is-active" data-panel="schema">
-            <div id="schemaTable"></div>
-          </div>
-          <div class="tab-pane" data-panel="ensemble">
-            <div id="ensembleTable"></div>
-          </div>
-          <div class="tab-pane" data-panel="parsed">
-            <div id="parsedTable"></div>
-          </div>
-          <div class="tab-pane" data-panel="system">
-            <div class="telemetry-grid">
-              <div class="telemetry-item"><span>Target Schema</span><strong id="schemaView">sample_id, catalog_content, image_link</strong></div>
-              <div class="telemetry-item"><span>Feature Shape</span><strong id="featureShapeView">(1, --)</strong></div>
-              <div class="telemetry-item"><span>API Invocations</span><strong id="requestsCount">0</strong></div>
-              <div class="telemetry-item"><span>Error Rate</span><strong id="errorRate">0.00%</strong></div>
-              <div class="telemetry-item"><span>Fallback Rate</span><strong id="fallbackRate">0.00%</strong></div>
-              <div class="telemetry-item"><span>DQ Pass Rate</span><strong id="dqPassRate">0.00%</strong></div>
-            </div>
-
-            <div class="meter-list">
-              <div class="meter-row"><span>Image Fallback</span><div class="meter-bar"><span id="imageFallbackBar"></span></div></div>
-              <div class="meter-row"><span>Text Fallback</span><div class="meter-bar"><span id="textFallbackBar"></span></div></div>
-              <div class="meter-row"><span>Error Rate</span><div class="meter-bar"><span id="errorRateBar"></span></div></div>
-              <div class="meter-row"><span>DQ Pass Rate</span><div class="meter-bar"><span id="dqPassBar"></span></div></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="raw-json-container">
-          <details class="code-details">
-            <summary>Raw Diagnostics JSON</summary>
-            <pre id="rawTraceBox" class="code-block"></pre>
-          </details>
-          <details class="code-details">
-            <summary>Live Service Snapshot</summary>
-            <pre id="serviceSnapshotBox" class="code-block"></pre>
-          </details>
-        </div>
-      </section>
-
-      <!-- System Quality Status -->
-      <section class="card status-card">
-        <h3>Live Service Reliability</h3>
-        <div class="reliability-grid">
-          <div class="rel-item"><span>Health</span><strong id="reliabilityHealth">OK</strong></div>
-          <div class="rel-item"><span>Fallback</span><strong id="reliabilityFallback">None</strong></div>
-          <div class="rel-item"><span>Error Rate</span><strong id="reliabilityError">0.00%</strong></div>
-          <div class="rel-item"><span>DQ Pass</span><strong id="reliabilityDQ">100%</strong></div>
-        </div>
-      </section>
-
-      <!-- System Architecture & MLOps Lineage -->
-      <section class="card arch-card" id="architecturePanel">
-        <h3>End-to-End MLOps Lineage</h3>
-        <p>Predictions are fully traceable from input parsing and ensemble scoring to immutable run bundle lineage and deployment manifests.</p>
-        <div class="lineage-steps">
-          <span>Git Push</span>
-          <span>GitHub Actions</span>
-          <span>DVC Pull</span>
-          <span>Model Training</span>
-          <span>Immutable Bundle</span>
-          <span>Hugging Face Space</span>
-        </div>
-      </section>
-
-      <footer class="footer">
-        <div class="footer-links">
-          <a id="bundleLink" target="_blank" rel="noreferrer">View Immutable Bundle</a>
-          <a id="mlflowLink" target="_blank" rel="noreferrer">View Training Lineage</a>
-          <a id="manifestLink" target="_blank" rel="noreferrer">View Deployment Manifest</a>
-        </div>
-      </footer>
-    </section>
   </main>
-
-  <button class="mobile-fab" id="mobileRunBtn" type="button">Execute Serving Pipeline</button>
 
   <script src="/frontend/dashboard.js"></script>
 </body>
 </html>
+
+

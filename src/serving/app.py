@@ -75,11 +75,11 @@ def _load_frontend_html() -> str:
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>A_ML_25: Multimodal Pricing Engine</title>
+    <title>NEURALIS: Multimodal Valuation Engine</title>
     <link rel="stylesheet" href="/frontend/dashboard.css" />
 </head>
 <body style="font-family: Arial, sans-serif; padding: 24px;">
-    <h1>A_ML_25: Multimodal Pricing Engine</h1>
+    <h1>NEURALIS: Multimodal Valuation Engine</h1>
     <p>Frontend file missing. Serving a minimal fallback interface.</p>
     <button id="runBtn" type="button">Execute Serving Pipeline</button>
 
@@ -101,7 +101,7 @@ def _load_frontend_html() -> str:
 
 
 def _github_repo_url() -> str:
-    return os.getenv("GITHUB_REPO_URL", "https://github.com/arpitkumar2004/A_ML_25").rstrip("/")
+    return os.getenv("GITHUB_REPO_URL", "https://github.com/arpitkumar2004/NEURALIS").rstrip("/")
 
 
 def _dagshub_repo_url() -> str:
@@ -111,7 +111,7 @@ def _dagshub_repo_url() -> str:
 
     host = str(os.getenv("DAGSHUB_HOST", "https://dagshub.com")).strip().rstrip("/")
     owner = str(os.getenv("DAGSHUB_REPO_OWNER", "arpitkumar2004")).strip()
-    repo = str(os.getenv("DAGSHUB_REPO_NAME", "A_ML_25")).strip()
+    repo = str(os.getenv("DAGSHUB_REPO_NAME", "NEURALIS")).strip()
     if owner and repo:
         return f"{host}/{owner}/{repo}"
     return host
@@ -409,7 +409,7 @@ class ModelService:
 
 
 service = ModelService()
-app = FastAPI(title="A_ML_25 Inference Service", version="1.0.0")
+app = FastAPI(title="NEURALIS Inference Service", version="1.0.0")
 app.mount(
     "/frontend",
     StaticFiles(directory=str(Path(__file__).resolve().parents[2] / "frontend")),
