@@ -128,10 +128,18 @@ class TextEmbedder:
             return cached
 
         if self.method == "sbert":
-            self._init_sbert()
-            emb = self._model.encode(texts, show_progress_bar=False, convert_to_numpy=True, batch_size=64)
-            self._save_cache(emb, fp)
-            return emb
+            try:
+                self._init_sbert()
+                emb = self._model.encode(texts, show_progress_bar=False, convert_to_numpy=True, batch_size=64)
+                self._save_cache(emb, fp)
+                return emb
+            except Exception as e:
+                logger.warning(f"SBERT embedding initialization failed ({e}). Automatically falling back to TF-IDF vectorizer...")
+                self._init_tfidf(texts)
+                X = self._vectorizer.transform(texts)
+                self._save_vectorizer()
+                self._save_cache(X, fp)
+                return X
         elif self.method == "tfidf":
             self._init_tfidf(texts)
             X = self._vectorizer.transform(texts)
@@ -150,11 +158,20 @@ class TextEmbedder:
             return cached
 
         if self.method == "sbert":
-            if self._model is None:
-                self._init_sbert()
-            out = self._model.encode(texts, show_progress_bar=False, convert_to_numpy=True, batch_size=64)
-            self._save_cache(out, fp)
-            return out
+            try:
+                if self._model is None:
+                    self._init_sbert()
+                out = self._model.encode(texts, show_progress_bar=False, convert_to_numpy=True, batch_size=64)
+                self._save_cache(out, fp)
+                return out
+            except Exception as e:
+                logger.warning(f"SBERT transform failed ({e}). Falling back to TF-IDF vectorizer...")
+                self._load_vectorizer()
+                if self._vectorizer is None:
+                    self._init_tfidf(texts)
+                out = self._vectorizer.transform(texts)
+                self._save_cache(out, fp)
+                return out
         else:
             self._load_vectorizer()
             if self._vectorizer is None:

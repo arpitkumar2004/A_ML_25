@@ -232,9 +232,10 @@ def run_train_pipeline(cfg: Dict[str, Any], model_name: Optional[str] = None) ->
 
         if model_name:
             selected = model_name.strip().lower()
-            model_entries = [entry for entry in model_entries if entry[0].lower() == selected]
-            if not model_entries:
-                raise ValueError(f"Unsupported or unavailable model_name='{model_name}'. Available: Linear, RF, LGBM" + (", XGB" if XGBModel is not None else "") + (", Cat" if CatModel is not None else ""))
+            if selected not in ["stacker", "all", "ensemble"]:
+                model_entries = [entry for entry in model_entries if entry[0].lower() == selected]
+                if not model_entries:
+                    raise ValueError(f"Unsupported or unavailable model_name='{model_name}'. Available: Linear, RF, LGBM" + (", XGB" if XGBModel is not None else "") + (", Cat" if CatModel is not None else "") + ", Stacker")
 
         for name, ModelClass, ctor_params in model_entries:
             try:

@@ -13,7 +13,7 @@ logger = LoggerFactory.get("dimensionality")
 
 try:
     import umap
-    UMAP_AVAILABLE = True
+    UMAP_AVAILABLE = hasattr(umap, "UMAP")
 except Exception:
     UMAP_AVAILABLE = False
 
@@ -77,18 +77,24 @@ class DimReducer:
                     self.model = data["model"]
                     return self.model.transform(X), data.get("meta", {})
 
-        if self.method == "pca":
-            self.model = PCA(n_components=self.n_components, random_state=self.random_state)
+        if self.method == "umap" and UMAP_AVAILABLE:
+            try:
+                self.model = umap.UMAP(n_components=self.n_components, random_state=self.random_state)
+                Xr = self.model.fit_transform(X)
+                meta = {}
+            except Exception as e:
+                logger.warning(f"UMAP reduction failed ({e}). Automatically falling back to PCA...")
+                self.method = "pca"
+                self.model = PCA(n_components=min(self.n_components, X.shape[1]), random_state=self.random_state)
+                Xr = self.model.fit_transform(X)
+                meta = {"explained_variance_ratio": self.model.explained_variance_ratio_.tolist()}
+        else:
+            if self.method == "umap":
+                logger.warning("UMAP not available or umap-learn package missing. Automatically falling back to PCA...")
+                self.method = "pca"
+            self.model = PCA(n_components=min(self.n_components, X.shape[1]), random_state=self.random_state)
             Xr = self.model.fit_transform(X)
             meta = {"explained_variance_ratio": self.model.explained_variance_ratio_.tolist()}
-        elif self.method == "umap":
-            if not UMAP_AVAILABLE:
-                raise ImportError("UMAP is not installed. Install umap-learn to use method='umap'.")
-            self.model = umap.UMAP(n_components=self.n_components, random_state=self.random_state)
-            Xr = self.model.fit_transform(X)
-            meta = {}
-        else:
-            raise ValueError(f"Unknown reducer: {self.method}")
 
         self._save_cache({"fingerprint": fp, "model": self.model, "X_reduced": Xr, "meta": meta})
         return Xr, meta
