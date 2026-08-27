@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Kaggle PrismPrice End-to-End Training, Evaluation, and Report Artifact Generator
+Kaggle NEURALIS End-to-End Training, Evaluation, and Report Artifact Generator
 ----------------------------------------------------------------------------------
 This script automatically:
   1. Clones the A_ML_25 GitHub repository (or uses current workspace).
@@ -70,7 +70,7 @@ def find_kaggle_dataset(fail_fast: bool = True):
 
 def run_pipeline():
     print("=========================================================================", flush=True)
-    print("⚡ PrismPrice Kaggle End-to-End ML Pipeline (Real-Time Unbuffered & Fail-Fast)", flush=True)
+    print("⚡ NEURALIS Kaggle End-to-End ML Pipeline (Real-Time Unbuffered & Fail-Fast)", flush=True)
     print("=========================================================================", flush=True)
 
     # Prepare environment with PYTHONUNBUFFERED=1 for live stdout streaming

@@ -1,4 +1,4 @@
-# PrismPrice — Multimodal Product Price Intelligence Platform
+# NEURALIS — Autonomous Multimodal Valuation Matrix
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg)](https://fastapi.tiangolo.com/)
@@ -7,9 +7,9 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![HF Space Deployment](https://img.shields.io/badge/Hugging%20Face-Space-yellow.svg)](https://arpitkumariitkgp-aml25.hf.space)
 
-> End-to-end MLOps platform for estimating product prices using text, visual embeddings, and parsed unit signals.
+> Deciphering market value at the intersection of vision, NLP, and ensemble intelligence.
 
-Built to bridge the gap between notebook experimentation and real-world deployment, **PrismPrice** provides a complete end-to-end ML lifecycle: offline training pipelines, out-of-fold stacking ensembles, immutable model bundle packaging, a versioned model registry, a FastAPI online serving microservice, an interactive Web Dashboard, automated CI/CD quality gates, and automated deployment to Hugging Face Spaces with zero-downtime health verification and rollback support.
+Built to bridge the gap between notebook experimentation and real-world deployment, **NEURALIS** provides a complete end-to-end ML lifecycle: offline training pipelines, out-of-fold stacking ensembles, immutable model bundle packaging, a versioned model registry, a FastAPI online serving microservice, an interactive Web Dashboard, automated CI/CD quality gates, and automated deployment to Hugging Face Spaces with zero-downtime health verification and rollback support.
 
 ---
 

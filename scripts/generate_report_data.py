@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PrismPrice Report Data & Visualizations Generator
+NEURALIS Report Data & Visualizations Generator
 ------------------------------------------------
 Executes empirical benchmarks, target skewness tests, regex parser coverage analysis,
 feature modality ablation experiments, 5-model + stacker comparisons, statistical significance tests,
@@ -965,7 +965,7 @@ def run_optuna_hpo_study(df: pd.DataFrame, n_trials: int = 15) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate empirical reports and visualizations for PrismPrice")
+    parser = argparse.ArgumentParser(description="Generate empirical reports and visualizations for NEURALIS")
     parser.add_argument("--data", type=str, default=None, help="Path to raw CSV dataset")
     args = parser.parse_args()
 

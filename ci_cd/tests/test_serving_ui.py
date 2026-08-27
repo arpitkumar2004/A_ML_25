@@ -6,7 +6,7 @@ def test_root_ui_exposes_sample_pipeline_data():
 
     body = serving_module.root()
 
-    assert "PrismPrice" in body
+    assert "NEURALIS" in body
     assert "Execute Serving Pipeline" in body
     assert "Execution Trace" in body
     assert "Ensemble Breakdown" in body
