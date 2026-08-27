@@ -121,9 +121,23 @@ class FeatureSelector:
             self._load()
         if self.selected_indices_ is None or len(self.selected_indices_) == 0:
             return X
+        n_cols = X.shape[1]
+        valid_indices = [i for i in self.selected_indices_ if i < n_cols]
+        if len(valid_indices) == 0:
+            return X
         if sparse.issparse(X):
-            return X[:, self.selected_indices_]
-        return np.asarray(X)[:, self.selected_indices_]
+            X_sel = X[:, valid_indices]
+            if X_sel.shape[1] < len(self.selected_indices_):
+                pad = sparse.csr_matrix((X_sel.shape[0], len(self.selected_indices_) - X_sel.shape[1]), dtype=X_sel.dtype)
+                return sparse.hstack([X_sel, pad], format="csr")
+            return X_sel
+        else:
+            X_arr = np.asarray(X)
+            X_sel = X_arr[:, valid_indices]
+            if X_sel.shape[1] < len(self.selected_indices_):
+                pad = np.zeros((X_sel.shape[0], len(self.selected_indices_) - X_sel.shape[1]), dtype=X_sel.dtype)
+                return np.hstack([X_sel, pad])
+            return X_sel
 
 
 def select_features(X, y, names=None, k=100):

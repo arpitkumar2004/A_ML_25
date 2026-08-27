@@ -2,20 +2,100 @@
    NEURALIS Senior UI/UX Master Application Controller
    ========================================================================== */
 
-const SAMPLE_ITEM = {
-  sample_id: 1001,
-  catalog_content: [
-    "Item Name: Log Cabin Sugar Free Syrup, 24 FL OZ (Pack of 12)",
-    "Bullet Point 1: Contains twelve (12) 24-ounce bottles of Log Cabin Sugar Free Syrup for Pancakes and Waffles",
-    "Bullet Point 2: Indulge in thick, delicious syrup for pancakes, waffles, French toast and more",
-    "Bullet Point 3: 90% fewer calories than our original syrup and no sugar or high fructose corn syrup",
-    "Bullet Point 4: Amazing syrup that you can feel good about serving to your family and guests",
-    "Bullet Point 5: Stock up on this breakfast staple for decadent pancakes and waffles anytime"
-  ].join("\n"),
-  image_link: "https://m.media-amazon.com/images/I/71QD2OFXqDL.jpg",
-  category: "Pantry & Grocery",
-  reference_price: 2.195
-};
+const SAMPLE_ITEMS = [
+  {
+    sample_id: 1001,
+    title: "Log Cabin Sugar Free Syrup 24 oz",
+    catalog_content: [
+      "Item Name: Log Cabin Sugar Free Syrup, 24 FL OZ (Pack of 12)",
+      "Bullet Point 1: Contains twelve (12) 24-ounce bottles of Log Cabin Sugar Free Syrup for Pancakes and Waffles",
+      "Bullet Point 2: Indulge in thick, delicious syrup for pancakes, waffles, French toast and more",
+      "Bullet Point 3: 90% fewer calories than our original syrup and no sugar or high fructose corn syrup",
+      "Bullet Point 4: Amazing syrup that you can feel good about serving to your family and guests",
+      "Bullet Point 5: Stock up on this breakfast staple for decadent pancakes and waffles anytime"
+    ].join("\n"),
+    image_link: "https://m.media-amazon.com/images/I/71QD2OFXqDL.jpg",
+    category: "Pantry & Grocery",
+    reference_price: 2.20
+  },
+  {
+    sample_id: 1002,
+    title: "Anker Soundcore 2 Bluetooth Speaker",
+    catalog_content: [
+      "Item Name: Anker Soundcore 2 Portable Bluetooth Speaker with 12W Stereo Sound",
+      "Bullet Point 1: Unbelievable Sound: 12W of pure audio power with enhanced bass drivers and dual passive radiators",
+      "Bullet Point 2: 24-Hour Playtime: Anker's leading battery technology and 5,200mAh Li-ion battery",
+      "Bullet Point 3: IPX7 Waterproof Protection: Safeguards against rain, dust, snow, and accidental submersion",
+      "Bullet Point 4: Wireless Stereo Pairing: Pair two Soundcore 2 speakers via a single device for double volume",
+      "Bullet Point 5: Compact & Lightweight: Designed for grab-and-go portability"
+    ].join("\n"),
+    image_link: "https://m.media-amazon.com/images/I/71W61y3aN-L.jpg",
+    category: "Electronics & Gadgets",
+    reference_price: 27.99
+  },
+  {
+    sample_id: 1003,
+    title: "CeraVe Hydrating Facial Cleanser 16 oz",
+    catalog_content: [
+      "Item Name: CeraVe Hydrating Facial Cleanser 16 Oz Daily Face Wash for Normal to Dry Skin",
+      "Bullet Point 1: DAILY FACE WASH: Gentle cleansing lotion with hyaluronic acid, ceramides, and glycerin",
+      "Bullet Point 2: NON-FOAMING CLEANSER: Removes makeup and dirt without stripping skin of natural moisture",
+      "Bullet Point 3: ESSENTIAL CERAMIDES: Formulated with three essential ceramides (1, 3, 6-II) to restore skin barrier",
+      "Bullet Point 4: DERMATOLOGIST RECOMMENDED: Developed with dermatologists, non-comedogenic and fragrance-free",
+      "Bullet Point 5: MFR PART: 3606000537750, 16 fl oz (473 ml) pump bottle"
+    ].join("\n"),
+    image_link: "https://m.media-amazon.com/images/I/71o2hh5E2AL.jpg",
+    category: "Beauty & Personal Care",
+    reference_price: 14.99
+  },
+  {
+    sample_id: 1004,
+    title: "Nespresso Vertuo Melozio Pods 30ct",
+    catalog_content: [
+      "Item Name: Nespresso VertuoLine Melozio Medium Roast Coffee Pods (30 Count Capsules)",
+      "Bullet Point 1: SMOOTH & BALANCED: Medium roast espresso blend with smooth cereal and honey notes",
+      "Bullet Point 2: BREWS 7.77 OZ COFFEE: Vertuo pods prepare 7.77 oz cups of rich coffee with crema",
+      "Bullet Point 3: RECYCLABLE ALUMINUM PODS: Fully recyclable aluminum capsules through Nespresso program",
+      "Bullet Point 4: VERTUO SYSTEM ONLY: Designed exclusively for Nespresso Vertuo machines",
+      "Bullet Point 5: Count: 30 pods (3 sleeves of 10 capsules)"
+    ].join("\n"),
+    image_link: "https://m.media-amazon.com/images/I/812h0FGSvTL.jpg",
+    category: "Home & Kitchen",
+    reference_price: 37.50
+  },
+  {
+    sample_id: 1005,
+    title: "Optimum Nutrition Gold Standard Whey 5 lbs",
+    catalog_content: [
+      "Item Name: Optimum Nutrition Gold Standard 100% Whey Protein Powder, Double Rich Chocolate, 5 Lbs",
+      "Bullet Point 1: 100% WHEY PROTEIN ISOLATE: Primary source for post-workout muscle recovery",
+      "Bullet Point 2: 24G PROTEIN PER SERVING: Helps build and maintain muscle when taken over time",
+      "Bullet Point 3: 5.5G BCAA & 4G GLUTAMINE: Naturally occurring branched chain amino acids per scoop",
+      "Bullet Point 4: INSTANTIZED MIXABILITY: Easily mixes with spoon or shaker cup in cold water or milk",
+      "Bullet Point 5: 5 LB TUB: Yields approximately 74 servings per container"
+    ].join("\n"),
+    image_link: "https://m.media-amazon.com/images/I/81TqCLXk6nL.jpg",
+    category: "Health & Household",
+    reference_price: 44.99
+  },
+  {
+    sample_id: 1006,
+    title: "Stanley Quencher H2.0 Tumbler 40 oz",
+    catalog_content: [
+      "Item Name: Stanley Quencher H2.0 FlowState Stainless Steel Vacuum Insulated Tumbler 40 oz",
+      "Bullet Point 1: YOUR DREAM TUMBLER: Keeps drinks ice cold for up to 48 hours or hot for 7 hours",
+      "Bullet Point 2: ADVANCED LID CONSTRUCTION: Features a rotating cover with three positions: straw opening, drink opening, and full cover",
+      "Bullet Point 3: CAR CUP HOLDER COMPATIBLE: Narrow base fits in almost any car cup holder",
+      "Bullet Point 4: EARTH-FRIENDLY DURABILITY: Made of 90% recycled BPA-free 18/8 stainless steel",
+      "Bullet Point 5: Capacity: 40 fl oz (1.18 L)"
+    ].join("\n"),
+    image_link: "https://m.media-amazon.com/images/I/71zM1LBJh3L.jpg",
+    category: "Sports & Outdoors",
+    reference_price: 45.00
+  }
+];
+
+const SAMPLE_ITEM = SAMPLE_ITEMS[0];
 
 const node = (id) => document.getElementById(id);
 const money = (val) => val === null || val === undefined || Number.isNaN(Number(val))
@@ -375,12 +455,23 @@ function resetForm() {
   if (node("traceCodeBlock")) node("traceCodeBlock").textContent = "Run a valuation to inspect pipeline diagnostics JSON...";
 }
 
-function loadSample() {
+function loadSample(index) {
   resetForm();
-  node("catalogContent").value = SAMPLE_ITEM.catalog_content;
-  node("imageUrl").value = SAMPLE_ITEM.image_link;
-  node("categorySelect").value = SAMPLE_ITEM.category;
-  node("referencePrice").value = SAMPLE_ITEM.reference_price;
+  let idx = index;
+  if (idx === undefined || idx === null) {
+    const sel = node("sampleSelect");
+    idx = sel ? parseInt(sel.value, 10) : 0;
+  }
+  if (Number.isNaN(idx) || idx < 0 || idx >= SAMPLE_ITEMS.length) idx = 0;
+
+  const item = SAMPLE_ITEMS[idx];
+  node("catalogContent").value = item.catalog_content;
+  node("imageUrl").value = item.image_link;
+  node("categorySelect").value = item.category;
+  node("referencePrice").value = item.reference_price;
+  
+  if (node("sampleSelect")) node("sampleSelect").value = String(idx);
+  
   updateCharCount();
   handleCategoryChange();
   updateImagePreview();
@@ -623,7 +714,8 @@ if (node("tabValuation")) node("tabValuation").addEventListener("click", () => s
 if (node("tabTelemetry")) node("tabTelemetry").addEventListener("click", () => switchTab("tabTelemetry"));
 if (node("tabHistory")) node("tabHistory").addEventListener("click", () => switchTab("tabHistory"));
 
-if (node("sampleBtn")) node("sampleBtn").addEventListener("click", loadSample);
+if (node("sampleSelect")) node("sampleSelect").addEventListener("change", (e) => loadSample(parseInt(e.target.value, 10)));
+if (node("sampleBtn")) node("sampleBtn").addEventListener("click", () => loadSample());
 if (node("runBtn")) node("runBtn").addEventListener("click", runValuation);
 if (node("resetFormBtn")) node("resetFormBtn").addEventListener("click", resetForm);
 if (node("copySummaryBtn")) node("copySummaryBtn").addEventListener("click", copyValuationSummary);

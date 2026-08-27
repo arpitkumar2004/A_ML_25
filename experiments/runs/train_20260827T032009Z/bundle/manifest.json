@@ -4,7 +4,7 @@
   "bundle_path": "experiments/runs/train_20260827T032009Z/bundle",
   "strategy": "hf_space",
   "status": "active",
-  "last_updated_utc": "2026-08-27T22:16:22.859471+00:00",
+  "last_updated_utc": "2026-08-27T22:14:13.364187+00:00",
   "deployment_manifest_path": "experiments/registry/deployment_manifest.json",
   "deployment": {
     "deployed_at_utc": "2026-08-27T22:13:50.715735+00:00",
@@ -21,8 +21,5 @@
     "entry_stage": "promotion",
     "matches_active_production": true
   },
-  "metrics": {
-    "latency_p95": 0.007541710202349349,
-    "error_rate": 0.0
-  }
+  "metrics": {}
 }

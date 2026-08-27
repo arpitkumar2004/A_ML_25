@@ -178,16 +178,19 @@ class PredictPipeline:
         for model_type, paths in self._base_models.items():
             # load each fold and average
             preds_per_fold = []
+            errors = []
             for p in paths:
                 try:
                     m = IO.load_pickle(p)
                     X_model = self._align_features_for_model(X, m)
                     preds_per_fold.append(m.predict(X_model))
                 except Exception as e:
-                    logger.warning(f"Loading/predicting with model {p} failed: {e}")
+                    errors.append(str(e))
             if preds_per_fold:
                 avg_pred = np.mean(np.vstack(preds_per_fold), axis=0)
                 preds[model_type] = avg_pred
+            elif errors:
+                logger.warning(f"All folds for model {model_type} failed (Reason: {errors[0]})")
         if not preds:
             raise RuntimeError("No base model predictions available.")
         df_preds = pd.DataFrame(preds)
@@ -200,9 +203,17 @@ class PredictPipeline:
         current runtime features differ. For operational serving checks, we align
         by truncating or zero-padding columns to the model's expected width.
         """
-        expected = getattr(model, "n_features_", None)
+        expected = (
+            getattr(model, "n_features_in_", None)
+            or getattr(model, "n_features_", None)
+        )
         if expected is None and hasattr(model, "model"):
-            expected = getattr(model.model, "n_features_", None)
+            inner = getattr(model, "model")
+            expected = (
+                getattr(inner, "n_features_in_", None)
+                or getattr(inner, "n_features_", None)
+                or getattr(inner, "n_features", None)
+            )
 
         if expected is None:
             return X
@@ -211,7 +222,7 @@ class PredictPipeline:
         if current == expected:
             return X
 
-        logger.warning(f"Aligning feature width for legacy model: current={current}, expected={expected}")
+        logger.debug(f"Aligning feature width for model: current={current}, expected={expected}")
 
         if sparse.issparse(X):
             X_csr = X.tocsr()
@@ -272,7 +283,8 @@ class PredictPipeline:
         reducer = self._load_dim_reducer()
         if reducer is not None and X_dense is not None:
             try:
-                X_final = reducer.transform(X_dense)
+                X_reduced_input = self._align_features_for_model(X_dense, reducer)
+                X_final = reducer.transform(X_reduced_input)
             except Exception as e:
                 logger.warning(f"Dim reducer transform failed: {e}; using dense features instead.")
                 X_final = X_dense
@@ -287,7 +299,17 @@ class PredictPipeline:
         # Load stacker if available
         self._load_stacker()
         if self._stacker is not None:
-            final_preds = self._stacker.predict(df_base_preds.values)
+            try:
+                X_stack = df_base_preds.values
+                stack_expected = getattr(self._stacker.model, "n_features_in_", None)
+                if stack_expected is not None and X_stack.shape[1] != stack_expected:
+                    logger.warning(f"Stacker expected {stack_expected} features, got {X_stack.shape[1]}. Falling back to ensemble averaging.")
+                    final_preds = df_base_preds.mean(axis=1).values
+                else:
+                    final_preds = self._stacker.predict(X_stack)
+            except Exception as stacker_exc:
+                logger.warning(f"Stacker prediction failed ({stacker_exc}); falling back to ensemble averaging.")
+                final_preds = df_base_preds.mean(axis=1).values
         else:
             # average base models
             final_preds = df_base_preds.mean(axis=1).values

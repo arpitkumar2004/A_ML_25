@@ -1,0 +1,84 @@
+{
+  "run_id": "infer_20260827T032409Z",
+  "stage": "inference",
+  "created_utc": "2026-08-27T08:29:03.311338+00:00",
+  "reproducibility": {
+    "config_sha256": "fece8746762155c1a0e6093ef65db2cb3b742fe968e28cb3019a6b39378fcfc4",
+    "pythonhashseed": "",
+    "seed": null
+  },
+  "config": {
+    "input_path": "/kaggle/input/datasets/kumararpitiitkgp/a-ml-2025/test.csv",
+    "output_path": "submission.csv",
+    "text_col": "catalog_content",
+    "image_col": "image_link",
+    "id_col": "sample_id",
+    "pred_col": "predicted_price",
+    "feature_cache": "data/processed/features.joblib",
+    "dim_cache": "data/processed/dimred.joblib",
+    "registry_dir": "experiments/registry",
+    "latency_log_path": "experiments/monitoring/latency_events.jsonl",
+    "selector_cfg": {
+      "enabled": true,
+      "method": "f_regression",
+      "k": 2048,
+      "min_features": 128,
+      "save_path": "data/processed/feature_selector.joblib",
+      "random_state": 42
+    },
+    "post_log_cfg": {
+      "enabled": true,
+      "alpha": 0.01,
+      "min_skew": 1.0,
+      "min_samples": 30,
+      "max_test_rows": 50000,
+      "save_path": "data/processed/post_feature_log_transform.joblib",
+      "random_state": 42
+    },
+    "models_dir": "experiments/models",
+    "oof_meta_path": "experiments/oof/model_names.joblib",
+    "stacker_path": "experiments/models/stacker.joblib",
+    "target_transform": "log1p",
+    "round": true,
+    "min_value": 0.0,
+    "mlflow": {
+      "enabled": true,
+      "tracking_uri": "",
+      "experiment_name": "A_ML_25-inference",
+      "dagshub": {
+        "enabled": false,
+        "repo_owner": "",
+        "repo_name": "",
+        "host": "https://dagshub.com"
+      }
+    }
+  },
+  "outputs": {
+    "output_path": "submission.csv",
+    "models_dir": "experiments/models",
+    "feature_cache": "data/processed/features.joblib",
+    "dim_cache": "data/processed/dimred.joblib",
+    "selector_path": "data/processed/feature_selector.joblib",
+    "latency_log_path": "experiments/monitoring/latency_events.jsonl",
+    "rows": 75000,
+    "data_quality": {
+      "policy": "allow",
+      "issues": [],
+      "rows": 75000
+    },
+    "mlflow": {
+      "enabled": false,
+      "mlflow_run_id": null,
+      "tracking_uri": "",
+      "experiment_name": "A_ML_25-inference"
+    },
+    "bundle_path": null
+  },
+  "timings_seconds": {
+    "load_input": 1.3129,
+    "pipeline_init": 0.0001,
+    "predict": 18292.6581,
+    "postprocess_and_save": 0.0841,
+    "total": 18294.058
+  }
+}

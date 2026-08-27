@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-08-27T22:17:26.126012",
+  "overall_status": "healthy",
+  "checks_passed": 3,
+  "checks_total": 3,
+  "checks": [
+    {
+      "name": "Production Model State",
+      "passed": true,
+      "message": "Active production run train_20260827T032009Z is bundle-backed"
+    },
+    {
+      "name": "Model Registry",
+      "passed": true,
+      "message": "Registry OK: 66 runs, active production=train_20260827T032009Z"
+    },
+    {
+      "name": "Inference Smoke Test",
+      "passed": true,
+      "message": "Inference OK for run train_20260827T032009Z"
+    }
+  ],
+  "failed_checks": [],
+  "all_passed": true
+}

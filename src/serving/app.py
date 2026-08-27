@@ -22,6 +22,7 @@ from ..utils.registry_loader import RegistryLoader
 from ..utils.model_bundle import resolve_bundle_path, validate_bundle
 
 logger = LoggerFactory.get("serving_app")
+# Reload trigger: USE_TF=0 and hardened feature_selector activated
 
 _SERVICE_METRICS = {
     "request_count": 0,

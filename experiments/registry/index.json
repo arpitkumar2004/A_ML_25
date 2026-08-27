@@ -286,7 +286,7 @@
       "run_id": "train_20260315T092100Z",
       "manifest_path": "experiments\\runs\\train_20260315T092100Z\\bundle\\manifest.json",
       "stage": "train",
-      "status": "production",
+      "status": "archived",
       "tracking": {
         "mlflow": {
           "enabled": false,
@@ -297,7 +297,7 @@
       },
       "bundle_path": "experiments\\runs\\train_20260315T092100Z\\bundle",
       "created_utc": "2026-03-15T09:21:06.351537+00:00",
-      "updated_utc": "2026-08-14T23:53:30.620610+00:00"
+      "updated_utc": "2026-08-27T21:41:55.809564+00:00"
     },
     {
       "run_id": "train_20260315T093004Z",
@@ -893,42 +893,40 @@
       "updated_utc": "2026-04-19T22:43:02.273349+00:00"
     },
     {
-      "run_id": "train_20260827T015659Z",
-      "manifest_path": "experiments\\runs\\train_20260827T015659Z\\bundle\\manifest.json",
-      "stage": "train",
-      "status": "staging",
+      "run_id": "train_20260827T032009Z",
+      "manifest_path": "experiments/runs/train_20260827T032009Z/bundle/manifest.json",
+      "stage": "promotion",
+      "status": "production",
       "tracking": {
-        "mlflow": {
-          "enabled": false,
-          "mlflow_run_id": null,
-          "tracking_uri": "",
-          "experiment_name": "A_ML_25_final_training"
-        }
+        "promoted_by": "automation",
+        "promotion_time": "2026-08-27T21:42:45.067123",
+        "promotion_url": "",
+        "target_stage": "production"
       },
-      "bundle_path": "experiments\\runs\\train_20260827T015659Z\\bundle",
-      "created_utc": "2026-08-27T01:57:28.419943+00:00",
-      "updated_utc": "2026-08-27T01:57:28.419943+00:00"
+      "bundle_path": "experiments/runs/train_20260827T032009Z/bundle",
+      "created_utc": "2026-08-27T03:23:41.455992+00:00",
+      "updated_utc": "2026-08-27T21:42:45.098478+00:00"
     },
     {
-      "run_id": "train_20260827T024102Z",
-      "manifest_path": "experiments\\runs\\train_20260827T024102Z\\bundle\\manifest.json",
-      "stage": "train",
-      "status": "staging",
+      "run_id": "infer_20260827T032409Z",
+      "manifest_path": "experiments/registry/infer_20260827T032409Z_inference_manifest.json",
+      "stage": "inference",
+      "status": "recorded",
       "tracking": {
         "mlflow": {
           "enabled": false,
           "mlflow_run_id": null,
           "tracking_uri": "",
-          "experiment_name": "A_ML_25_final_training"
+          "experiment_name": "A_ML_25-inference"
         }
       },
-      "bundle_path": "experiments\\runs\\train_20260827T024102Z\\bundle",
-      "created_utc": "2026-08-27T02:41:22.147967+00:00",
-      "updated_utc": "2026-08-27T02:41:22.147967+00:00"
+      "bundle_path": null,
+      "created_utc": "2026-08-27T08:29:03.312046+00:00",
+      "updated_utc": "2026-08-27T08:29:03.312058+00:00"
     },
     {
-      "run_id": "train_20260827T024155Z",
-      "manifest_path": "experiments\\runs\\train_20260827T024155Z\\bundle\\manifest.json",
+      "run_id": "train_20260827T221155Z",
+      "manifest_path": "experiments\\runs\\train_20260827T221155Z\\bundle\\manifest.json",
       "stage": "train",
       "status": "staging",
       "tracking": {
@@ -936,13 +934,30 @@
           "enabled": false,
           "mlflow_run_id": null,
           "tracking_uri": "",
-          "experiment_name": "A_ML_25_final_training"
+          "experiment_name": "NEURALIS"
         }
       },
-      "bundle_path": "experiments\\runs\\train_20260827T024155Z\\bundle",
-      "created_utc": "2026-08-27T02:42:11.982047+00:00",
-      "updated_utc": "2026-08-27T02:42:11.982047+00:00"
+      "bundle_path": "experiments\\runs\\train_20260827T221155Z\\bundle",
+      "created_utc": "2026-08-27T22:11:58.403638+00:00",
+      "updated_utc": "2026-08-27T22:11:58.403638+00:00"
+    },
+    {
+      "run_id": "infer_20260827T221158Z",
+      "manifest_path": "experiments/registry\\infer_20260827T221158Z_inference_manifest.json",
+      "stage": "inference",
+      "status": "recorded",
+      "tracking": {
+        "mlflow": {
+          "enabled": false,
+          "mlflow_run_id": null,
+          "tracking_uri": "",
+          "experiment_name": "NEURALIS"
+        }
+      },
+      "bundle_path": null,
+      "created_utc": "2026-08-27T22:11:59.779893+00:00",
+      "updated_utc": "2026-08-27T22:11:59.779893+00:00"
     }
   ],
-  "active_production_run_id": "train_20260315T092100Z"
+  "active_production_run_id": "train_20260827T032009Z"
 }

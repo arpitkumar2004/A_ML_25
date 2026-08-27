@@ -611,8 +611,33 @@ textarea.form-control {
 /* Buttons */
 .form-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-top: 24px;
+}
+
+.sample-loader-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 280px;
+}
+
+.sample-select-dropdown {
+  flex: 1;
+  font-size: 0.825rem;
+  padding: 11px 12px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-heading);
+  font-weight: 500;
+}
+
+.sample-select-dropdown:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
 }
 
 .btn {

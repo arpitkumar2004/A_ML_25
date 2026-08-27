@@ -1,0 +1,59 @@
+{
+  "data_path": "experiments\\smoke_check\\data\\train_200.csv",
+  "sample_frac": 1.0,
+  "target_col": "price",
+  "text_col": "catalog_content",
+  "image_col": "image_link",
+  "id_col": "sample_id",
+  "text_cfg": {
+    "method": "tfidf",
+    "cache_path": "experiments\\smoke_check\\cache\\text_embeddings.joblib",
+    "tfidf_max_features": 256,
+    "tfidf_ngram_range": [
+      1,
+      2
+    ],
+    "model_name": "all-MiniLM-L6-v2",
+    "vectorizer_path": "data/processed/tfidf_vectorizer.joblib"
+  },
+  "image_cfg": {
+    "cache_path": "experiments\\smoke_check\\cache\\image_embeddings.joblib"
+  },
+  "numeric_cfg": {
+    "scaler_path": "experiments\\smoke_check\\cache\\numeric_scaler.joblib"
+  },
+  "feature_cache": "experiments\\smoke_check\\cache\\features.joblib",
+  "dim_cache": "experiments\\smoke_check\\cache\\dimred.joblib",
+  "use_dim_cache": false,
+  "dim_method": "pca",
+  "dim_components": 10,
+  "n_splits": 2,
+  "random_state": 42,
+  "stratify": false,
+  "run_stacker": false,
+  "force_rebuild": true,
+  "models_out": "experiments\\smoke_check\\models",
+  "oof_out": "experiments\\smoke_check\\oof",
+  "reports_dir": "experiments\\smoke_check\\reports",
+  "report_out": "experiments\\smoke_check\\reports\\model_comparison.joblib",
+  "report_csv": "experiments\\smoke_check\\reports\\model_comparison.csv",
+  "dim_meta_out": "experiments\\smoke_check\\reports\\dim_meta.joblib",
+  "run_id": "train_20260827T221155Z",
+  "bundle_path": "experiments\\runs\\train_20260827T221155Z\\bundle",
+  "selector_cfg": {
+    "save_path": "data/processed/feature_selector.joblib"
+  },
+  "post_log_cfg": {
+    "save_path": "data/processed/post_feature_log_transform.joblib"
+  },
+  "target_transform": "log1p",
+  "target_skew_meta": {
+    "applied": true,
+    "p_value": 5.754573459025187e-60,
+    "skew": 10.2680479448795,
+    "alpha": 0.01,
+    "min_skew": 1.0,
+    "method": "skewtest+log1p",
+    "tested_rows": 200
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "run_id": "infer_20260827T221158Z",
+  "stage": "inference",
+  "created_utc": "2026-08-27T22:11:59.736756+00:00",
+  "reproducibility": {
+    "config_sha256": "56fa9bb981618364bad467027646a58f6673e9b62d940d54b704a72f1e1b6343",
+    "pythonhashseed": "",
+    "seed": null
+  },
+  "config": {
+    "input_path": "experiments\\smoke_check\\data\\test_50.csv",
+    "output_path": "experiments\\smoke_check\\submissions\\smoke_submission_50.csv",
+    "text_col": "Description",
+    "image_col": "image_path",
+    "id_col": "unique_identifier",
+    "pred_col": "predicted_price",
+    "feature_cache": "experiments\\smoke_check\\cache\\features_test.joblib",
+    "dim_cache": "experiments\\smoke_check\\cache\\dimred.joblib",
+    "models_dir": "experiments\\smoke_check\\models",
+    "oof_meta_path": "experiments\\smoke_check\\oof\\model_names.joblib",
+    "stacker_path": "experiments\\smoke_check\\models\\stacker.joblib",
+    "target_transform": null,
+    "round": true,
+    "min_value": 0.0,
+    "force_rebuild_features": true,
+    "text_cfg": {
+      "method": "tfidf",
+      "cache_path": "experiments\\smoke_check\\cache\\text_embeddings_test.joblib",
+      "tfidf_max_features": 256,
+      "tfidf_ngram_range": [
+        1,
+        2
+      ]
+    },
+    "image_cfg": {
+      "cache_path": "experiments\\smoke_check\\cache\\image_embeddings_test.joblib"
+    },
+    "numeric_cfg": {
+      "scaler_path": "experiments\\smoke_check\\cache\\numeric_scaler.joblib"
+    }
+  },
+  "outputs": {
+    "output_path": "experiments\\smoke_check\\submissions\\smoke_submission_50.csv",
+    "models_dir": "experiments\\smoke_check\\models",
+    "feature_cache": "experiments\\smoke_check\\cache\\features_test.joblib",
+    "dim_cache": "experiments\\smoke_check\\cache\\dimred.joblib",
+    "selector_path": "data/processed/feature_selector.joblib",
+    "latency_log_path": "experiments/monitoring/latency_events.jsonl",
+    "rows": 50,
+    "data_quality": {
+      "policy": "allow",
+      "issues": [],
+      "rows": 50
+    },
+    "mlflow": {
+      "enabled": false,
+      "mlflow_run_id": null,
+      "tracking_uri": "",
+      "experiment_name": "NEURALIS"
+    },
+    "bundle_path": null
+  },
+  "timings_seconds": {
+    "load_input": 0.0662,
+    "pipeline_init": 0.0001,
+    "predict": 1.1512,
+    "postprocess_and_save": 0.0044,
+    "total": 1.3226
+  }
+}

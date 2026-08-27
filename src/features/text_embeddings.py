@@ -21,6 +21,10 @@ warnings.filterwarnings("ignore")
 
 logger = LoggerFactory.get("text_embeddings")
 
+# Disable TensorFlow in transformers/sentence_transformers to prevent broken TF dtypes crashes
+os.environ.setdefault("USE_TF", "0")
+os.environ.setdefault("USE_TORCH", "1")
+
 # Try to import sentence-transformers; fall back to TF-IDF if not available
 try:
     from sentence_transformers import SentenceTransformer

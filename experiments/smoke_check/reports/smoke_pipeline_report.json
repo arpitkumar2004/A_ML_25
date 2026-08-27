@@ -6,13 +6,13 @@
     "seed": 42
   },
   "timings_seconds": {
-    "load_train_sample": 3.7161,
-    "load_test_sample": 2.5058,
-    "sanity_parse_train": 0.0393,
-    "feature_build_only": 238.8371,
-    "dim_reduction_only": 0.1748,
-    "train_pipeline": 195.9128,
-    "inference_pipeline": 63.6673
+    "load_train_sample": 2.6694,
+    "load_test_sample": 2.7906,
+    "sanity_parse_train": 0.3967,
+    "feature_build_only": 2.3081,
+    "dim_reduction_only": 0.1321,
+    "train_pipeline": 2.5849,
+    "inference_pipeline": 1.3769
   },
   "complexity": {
     "load_and_sample": "O(n)",
@@ -30,7 +30,7 @@
     "prediction_rows": 50,
     "expected_rows": 50,
     "prediction_columns": [
-      "unique_identifier",
+      "sample_id",
       "predicted_price"
     ],
     "status": "PASS"

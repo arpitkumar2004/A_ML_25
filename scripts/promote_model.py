@@ -69,7 +69,7 @@ def promote_model(
         # Promote to target stage
         promote_run(run_id, target_stage, registry_dir, activate_production=activate_production)
         
-        print(f"✓ Model {run_id} promoted to {target_stage}")
+        print(f"[SUCCESS] Model {run_id} promoted to {target_stage}")
         
         # Create promotion record
         promotion_record = {
@@ -88,7 +88,7 @@ def promote_model(
         return os.path.join(registry_dir, "index.json")
     
     except Exception as e:
-        print(f"✗ Promotion failed: {str(e)}")
+        print(f"[ERROR] Promotion failed: {str(e)}")
         raise
 
 

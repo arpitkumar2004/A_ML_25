@@ -194,15 +194,27 @@
               </div>
             </div>
 
-            <!-- Primary Action Buttons -->
+            <!-- Primary Action Buttons & Multi-Sample Presets -->
             <div class="form-actions">
               <button class="btn btn-primary btn-lg" id="runBtn" type="button">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                 <span id="runBtnText">Calculate Valuation</span>
               </button>
-              <button class="btn btn-secondary" id="sampleBtn" type="button" title="Load sample grocery item (Shortcut: Alt+S)">
-                <span>Load Sample</span>
-              </button>
+              
+              <div class="sample-loader-group">
+                <select id="sampleSelect" class="form-control sample-select-dropdown" aria-label="Select demo product sample preset">
+                  <option value="0">🍵 Demo 1: Log Cabin Syrup 24oz ($2.20)</option>
+                  <option value="1">🔊 Demo 2: Anker Bluetooth Speaker ($27.99)</option>
+                  <option value="2">🧴 Demo 3: CeraVe Facial Cleanser 16oz ($14.99)</option>
+                  <option value="3">☕ Demo 4: Nespresso Vertuo Pods 30ct ($37.50)</option>
+                  <option value="4">🏋️ Demo 5: Optimum Nutrition Whey 5lbs ($44.99)</option>
+                  <option value="5">🥤 Demo 6: Stanley Quencher Tumbler 40oz ($45.00)</option>
+                </select>
+                <button class="btn btn-secondary" id="sampleBtn" type="button" title="Load selected sample (Shortcut: Alt+S)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span>Load Sample</span>
+                </button>
+              </div>
             </div>
           </form>
         </section>
